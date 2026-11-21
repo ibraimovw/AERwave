@@ -24,28 +24,28 @@ function worldYToLat(wy, zoom) {
 
 function getLayerColor(layer, pt) {
   if (layer === 'temp') {
-    if (pt.temperature <= -10) return '#3e8cff';
-    if (pt.temperature <= 0) return '#635bff';
-    if (pt.temperature <= 10) return '#b83dff';
-    if (pt.temperature <= 20) return '#f17bd2';
-    if (pt.temperature <= 28) return '#ff4f83';
-    return '#ff2d68';
+    if (pt.temperature <= -10) return '#38bdf8';
+    if (pt.temperature <= 0) return '#60a5fa';
+    if (pt.temperature <= 10) return '#a78bfa';
+    if (pt.temperature <= 20) return '#fda4af';
+    if (pt.temperature <= 28) return '#fb7185';
+    return '#e11d48';
   }
   if (layer === 'precip') {
     if (pt.precipitation <= 0.1) return '#64748b';
-    if (pt.precipitation <= 1.0) return '#3e8cff';
-    if (pt.precipitation <= 4.0) return '#635bff';
-    return '#b83dff';
+    if (pt.precipitation <= 1.0) return '#7dd3fc';
+    if (pt.precipitation <= 4.0) return '#38bdf8';
+    return '#818cf8';
   }
   if (layer === 'wind') {
-    if (pt.windSpeed < 12) return '#3e8cff';
-    if (pt.windSpeed < 25) return '#635bff';
-    if (pt.windSpeed < 40) return '#b83dff';
-    return '#ff2d68';
+    if (pt.windSpeed < 12) return '#7dd3fc';
+    if (pt.windSpeed < 25) return '#60a5fa';
+    if (pt.windSpeed < 40) return '#fbbf24';
+    return '#fb7185';
   }
-  if (pt.cloudCover < 25) return '#3e8cff';
-  if (pt.cloudCover < 60) return '#b83dff';
-  return '#cbd5e1';
+  if (pt.cloudCover < 25) return '#7dd3fc';
+  if (pt.cloudCover < 60) return '#94a3b8';
+  return '#e2e8f0';
 }
 
 function formatGridValue(layer, pt, unit, t) {
@@ -171,30 +171,30 @@ export function createWeatherMapView({city, cityName, unit, t}) {
     const items =
       activeLayer === 'temp'
         ? [
-            {c: '#3e8cff', l: `${convertTemp(-10, unit)}°`},
-            {c: '#635bff', l: `${convertTemp(0, unit)}°`},
-            {c: '#b83dff', l: `${convertTemp(10, unit)}°`},
-            {c: '#f17bd2', l: `${convertTemp(20, unit)}°`},
-            {c: '#ff2d68', l: `${convertTemp(30, unit)}°+`},
+            {c: '#38bdf8', l: `${convertTemp(-10, unit)}°`},
+            {c: '#60a5fa', l: `${convertTemp(0, unit)}°`},
+            {c: '#a78bfa', l: `${convertTemp(10, unit)}°`},
+            {c: '#fda4af', l: `${convertTemp(20, unit)}°`},
+            {c: '#e11d48', l: `${convertTemp(30, unit)}°+`},
           ]
         : activeLayer === 'precip'
           ? [
               {c: '#64748b', l: `0`},
-              {c: '#3e8cff', l: `0.5`},
-              {c: '#635bff', l: `2.5`},
-              {c: '#b83dff', l: `4.0+ ${t.map.units.precip}`},
+              {c: '#7dd3fc', l: `0.5`},
+              {c: '#38bdf8', l: `2.5`},
+              {c: '#818cf8', l: `4.0+ ${t.map.units.precip}`},
             ]
           : activeLayer === 'wind'
             ? [
-                {c: '#3e8cff', l: `<12`},
-                {c: '#635bff', l: `20`},
-                {c: '#b83dff', l: `35`},
-                {c: '#ff2d68', l: `40+ ${t.map.units.wind}`},
+                {c: '#7dd3fc', l: `<12`},
+                {c: '#60a5fa', l: `20`},
+                {c: '#fbbf24', l: `35`},
+                {c: '#fb7185', l: `40+ ${t.map.units.wind}`},
               ]
             : [
-                {c: '#3e8cff', l: '0–25%'},
-                {c: '#b83dff', l: '25–60%'},
-                {c: '#cbd5e1', l: '60–100%'},
+                {c: '#7dd3fc', l: '0–25%'},
+                {c: '#94a3b8', l: '25–60%'},
+                {c: '#e2e8f0', l: '60–100%'},
               ];
 
     for (const item of items) {

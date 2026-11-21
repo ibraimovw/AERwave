@@ -2,7 +2,7 @@ export const TRANSLATIONS = {
   ru: {
     brandName: 'AER.wave',
     slogan: 'Beyond the forecast',
-    version: 'v7 · Pure JS',
+    version: 'v7',
     nav: {
       home: 'Главная',
       forecast: 'Прогноз 16 дн.',
@@ -112,7 +112,7 @@ export const TRANSLATIONS = {
       daily8SparklineTitle: 'Диапазон температур · 8 дней',
       open16Days: 'Все 16 дней',
       mapPreviewTitle: 'Живая карта погоды',
-      mapPreviewDesc: 'Сетка Open-Meteo: температура, осадки, ветер и облачность без сторонних библиотек',
+      mapPreviewDesc: 'Сетка Open-Meteo: температура, осадки, ветер и облачность',
       openMap: 'Открыть карту',
       now: 'Сейчас',
       today: 'Сегодня',
@@ -142,7 +142,7 @@ export const TRANSLATIONS = {
     },
     map: {
       title: 'Интерактивная карта погоды',
-      subtitle: 'Самописная тайловая карта OpenStreetMap + сетка Open-Meteo',
+      subtitle: 'Карта OpenStreetMap и метеорологическая сетка Open-Meteo',
       layers: {
         temp: 'Температура',
         precip: 'Осадки',
@@ -152,7 +152,7 @@ export const TRANSLATIONS = {
       refreshBtn: 'Обновить сетку',
       refreshing: 'Обновление…',
       disclaimer:
-        'Карта реализована на чистом JS по тайлам OpenStreetMap (Меркатор). Перетаскивайте карту или меняйте масштаб колесом/кнопками.',
+        'Интерактивная карта OpenStreetMap в проекции Меркатора с метеосеткой Open-Meteo. Перетаскивайте карту или меняйте масштаб колесом и кнопками.',
       legendTitle: 'Шкала',
       gridUpdated: 'Сетка обновлена',
       activeCity: 'Выбранный город',
@@ -232,7 +232,7 @@ export const TRANSLATIONS = {
   en: {
     brandName: 'AER.wave',
     slogan: 'Beyond the forecast',
-    version: 'v7 · Pure JS',
+    version: 'v7',
     nav: {
       home: 'Home',
       forecast: '16-Day Forecast',
@@ -372,7 +372,7 @@ export const TRANSLATIONS = {
     },
     map: {
       title: 'Interactive Weather Map',
-      subtitle: 'Custom Vanilla JS OpenStreetMap slippy tile map + Open-Meteo grid',
+      subtitle: 'OpenStreetMap weather map + Open-Meteo spatial grid',
       layers: {
         temp: 'Temperature',
         precip: 'Precipitation',
@@ -382,7 +382,7 @@ export const TRANSLATIONS = {
       refreshBtn: 'Refresh grid',
       refreshing: 'Updating…',
       disclaimer:
-        'Powered by a zero-library Web Mercator tile renderer on OpenStreetMap + Open-Meteo grid sampling.',
+        'Interactive Web Mercator OpenStreetMap with Open-Meteo meteorological grid sampling. Drag to pan or zoom with wheel and controls.',
       legendTitle: 'Scale',
       gridUpdated: 'Grid updated',
       activeCity: 'Active city',

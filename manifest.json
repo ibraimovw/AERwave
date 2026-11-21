@@ -2,7 +2,7 @@
   "id": "./",
   "name": "AER.wave — Beyond the forecast",
   "short_name": "AER.wave",
-  "description": "Независимая версия AER.wave v7 на чистом HTML, CSS и JavaScript без React и библиотек.",
+  "description": "AER.wave — адаптивный погодный сервис с прогнозом на 16 дней, качеством воздуха и интерактивной картой.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",

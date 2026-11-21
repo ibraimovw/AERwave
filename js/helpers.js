@@ -27,6 +27,20 @@ export function el(tag, props = {}, ...children) {
   return node;
 }
 
+export function setChildren(parent, ...children) {
+  if (!parent) return;
+  const nodes = [];
+  for (const child of children.flat(Infinity)) {
+    if (child === null || child === undefined || child === false) continue;
+    if (typeof child === 'string' || typeof child === 'number') {
+      nodes.push(document.createTextNode(String(child)));
+    } else if (child instanceof Node) {
+      nodes.push(child);
+    }
+  }
+  parent.replaceChildren(...nodes);
+}
+
 export function attachSpotlight(node) {
   node.classList.add('glass-spotlight');
   node.addEventListener('pointermove', (e) => {
@@ -40,6 +54,51 @@ export function attachSpotlight(node) {
     node.style.setProperty('--spotlight-opacity', '0');
   });
   return node;
+}
+
+export function initMagneticButtons() {
+  if (typeof window === 'undefined') return;
+  const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  if (reduced) return;
+
+  const selector =
+    '.btn-primary, .btn-subtle, .btn-icon, .btn-theme-circle, .seg-btn, .preset-btn, .chip-btn, .sidebar-toggle-btn, .nav-btn';
+  let activeEl = null;
+
+  const resetActive = () => {
+    if (!activeEl) return;
+    activeEl.style.setProperty('--mag-x', '0px');
+    activeEl.style.setProperty('--mag-y', '0px');
+    activeEl = null;
+  };
+
+  document.addEventListener(
+    'pointermove',
+    (e) => {
+      if (e.pointerType !== 'mouse') return;
+      const target = e.target instanceof Element ? e.target.closest(selector) : null;
+      if (!target || target.disabled) {
+        resetActive();
+        return;
+      }
+      if (activeEl && activeEl !== target) {
+        activeEl.style.setProperty('--mag-x', '0px');
+        activeEl.style.setProperty('--mag-y', '0px');
+      }
+      activeEl = target;
+      const rect = target.getBoundingClientRect();
+      if (!rect.width || !rect.height) return;
+      const nx = ((e.clientX - rect.left) / rect.width - 0.5) * 2;
+      const ny = ((e.clientY - rect.top) / rect.height - 0.5) * 2;
+      const pull = target.classList.contains('btn-primary') ? 5.5 : 3.5;
+      target.style.setProperty('--mag-x', `${(nx * pull).toFixed(2)}px`);
+      target.style.setProperty('--mag-y', `${(ny * pull).toFixed(2)}px`);
+    },
+    {passive: true}
+  );
+
+  document.addEventListener('pointerleave', resetActive, true);
+  window.addEventListener('blur', resetActive);
 }
 
 export function convertTemp(tempC, unit) {

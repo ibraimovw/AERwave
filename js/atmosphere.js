@@ -109,7 +109,7 @@ export function startWeatherCanvas(canvas) {
           p.x = Math.random() * width;
         }
         if (p.x > width) p.x -= width;
-        ctx.strokeStyle = isLight ? `rgba(152,103,217,${p.alpha})` : `rgba(138,180,255,${p.alpha})`;
+        ctx.strokeStyle = isLight ? `rgba(59,130,246,${p.alpha * 1.1})` : `rgba(147,197,253,${p.alpha})`;
         ctx.lineWidth = 1.1;
         ctx.beginPath();
         ctx.moveTo(p.x, p.y);
@@ -124,7 +124,7 @@ export function startWeatherCanvas(canvas) {
         }
         if (p.x > width) p.x -= width;
         if (p.x < 0) p.x += width;
-        ctx.fillStyle = isLight ? `rgba(180,90,130,${p.alpha * 0.7})` : `rgba(244,244,248,${p.alpha})`;
+        ctx.fillStyle = isLight ? `rgba(100,116,139,${p.alpha * 0.7})` : `rgba(244,244,248,${p.alpha})`;
         ctx.beginPath();
         ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
         ctx.fill();
@@ -132,7 +132,7 @@ export function startWeatherCanvas(canvas) {
         p.x += p.vx;
         if (p.x - p.size > width) p.x = -p.size;
         const grad = ctx.createRadialGradient(p.x, p.y, 10, p.x, p.y, p.size);
-        const rgb = isLight ? '237,56,109' : '185,195,225';
+        const rgb = isLight ? '100,116,139' : '185,195,225';
         grad.addColorStop(0, `rgba(${rgb},${p.alpha})`);
         grad.addColorStop(1, `rgba(${rgb},0)`);
         ctx.fillStyle = grad;
@@ -148,10 +148,10 @@ export function startWeatherCanvas(canvas) {
         if (p.y > height * 0.75) p.y = 0;
         const twinkle = p.alpha * (0.65 + 0.35 * Math.sin(p.phase * 1.4));
         ctx.fillStyle = isLight
-          ? `rgba(232,50,104,${twinkle * 0.45})`
+          ? `rgba(225,29,72,${twinkle * 0.34})`
           : state.dayPhase === 'night'
-            ? `rgba(244,244,250,${twinkle})`
-            : `rgba(255,210,230,${twinkle * 0.6})`;
+            ? `rgba(255,241,242,${twinkle})`
+            : `rgba(253,164,175,${twinkle * 0.45})`;
         ctx.beginPath();
         ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
         ctx.fill();
