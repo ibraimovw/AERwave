@@ -609,7 +609,7 @@ function renderTopBar() {
       ),
       el(
         'div',
-        {className: 'seg-group desktop-only-ctrl', role: 'group', 'aria-label': t.topbar.langLabel},
+        {className: 'seg-group', role: 'group', 'aria-label': t.topbar.langLabel},
         el('span', {className: 'seg-label mono'}, t.topbar.langLabel),
         ['ru', 'en'].map((code) =>
           el(
@@ -625,7 +625,7 @@ function renderTopBar() {
       ),
       el(
         'div',
-        {className: 'seg-group desktop-only-ctrl', role: 'group', 'aria-label': t.topbar.unitLabel},
+        {className: 'seg-group', role: 'group', 'aria-label': t.topbar.unitLabel},
         el('span', {className: 'seg-label mono'}, t.topbar.unitLabel),
         ['C', 'F'].map((u) =>
           el(
@@ -1643,7 +1643,10 @@ function renderHomeView() {
             ),
             el(
               'span',
-              {className: 'mono muted-xs', style: {width: '36px', textAlign: 'right'}},
+              {
+                className: 'mono',
+                style: {width: '36px', textAlign: 'right', fontSize: '12px', color: 'var(--spark-min)', fontWeight: '500'},
+              },
               formatTemp(d.tempMin, state.unit)
             ),
             el(

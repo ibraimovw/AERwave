@@ -250,13 +250,17 @@ export function createSparkline({title, points, unitSuffix = '°', height = 78, 
   grad.setAttribute('y2', '1');
   const s1 = document.createElementNS(SVG_NS, 'stop');
   s1.setAttribute('offset', '0%');
-  s1.setAttribute('stop-color', 'var(--pink)');
-  s1.setAttribute('stop-opacity', '0.24');
+  s1.setAttribute('stop-color', 'var(--spark-max, var(--pink))');
+  s1.setAttribute('stop-opacity', '0.22');
   const s2 = document.createElementNS(SVG_NS, 'stop');
-  s2.setAttribute('offset', '100%');
-  s2.setAttribute('stop-color', 'var(--pink)');
-  s2.setAttribute('stop-opacity', '0');
-  grad.append(s1, s2);
+  s2.setAttribute('offset', '58%');
+  s2.setAttribute('stop-color', 'var(--spark-min, var(--blue))');
+  s2.setAttribute('stop-opacity', '0.07');
+  const s3 = document.createElementNS(SVG_NS, 'stop');
+  s3.setAttribute('offset', '100%');
+  s3.setAttribute('stop-color', 'var(--spark-min, var(--blue))');
+  s3.setAttribute('stop-opacity', '0');
+  grad.append(s1, s2, s3);
   defs.appendChild(grad);
   svg.appendChild(defs);
 
@@ -269,17 +273,18 @@ export function createSparkline({title, points, unitSuffix = '°', height = 78, 
     const sec = document.createElementNS(SVG_NS, 'path');
     sec.setAttribute('d', secondaryPath);
     sec.setAttribute('fill', 'none');
-    sec.setAttribute('stroke', 'var(--blue)');
+    sec.setAttribute('stroke', 'var(--spark-min, var(--blue))');
     sec.setAttribute('stroke-width', '2');
-    sec.setAttribute('stroke-dasharray', '4 4');
-    sec.setAttribute('opacity', '0.82');
+    sec.setAttribute('stroke-dasharray', '5 4');
+    sec.setAttribute('stroke-linecap', 'round');
+    sec.setAttribute('opacity', '0.9');
     svg.appendChild(sec);
   }
 
   const line = document.createElementNS(SVG_NS, 'path');
   line.setAttribute('d', primaryPath);
   line.setAttribute('fill', 'none');
-  line.setAttribute('stroke', 'var(--pink)');
+  line.setAttribute('stroke', 'var(--spark-max, var(--pink))');
   line.setAttribute('stroke-width', '2.5');
   line.setAttribute('stroke-linecap', 'round');
   svg.appendChild(line);
@@ -294,7 +299,7 @@ export function createSparkline({title, points, unitSuffix = '°', height = 78, 
   const dot = document.createElementNS(SVG_NS, 'circle');
   dot.setAttribute('r', '4.5');
   dot.setAttribute('fill', 'var(--surface)');
-  dot.setAttribute('stroke', 'var(--pink)');
+  dot.setAttribute('stroke', 'var(--spark-max, var(--pink))');
   dot.setAttribute('stroke-width', '2.5');
   dot.style.display = 'none';
   svg.append(guide, dot);
