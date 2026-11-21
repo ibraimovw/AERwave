@@ -2,115 +2,343 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="description" content="AER.wave — Beyond the forecast" />
   <title>AER.wave — Beyond the forecast</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <link rel="stylesheet" href="style.css" />
+  <link rel="icon" type="image/png" href="assets/favicon.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+  <link rel="stylesheet" href="css/style.css" />
+  <link rel="stylesheet" href="css/responsive.css" />
+  <link rel="stylesheet" href="css/animations.css" />
 </head>
-<body data-time="day">
-  <div class="bg-orb orb-1"></div>
-  <div class="bg-orb orb-2"></div>
-
-  <div class="app-container">
-    <header class="glass-panel top-bar">
-      <div class="brand">
-        <svg class="logo" width="36" height="36" viewBox="0 0 36 36" fill="none">
-          <rect width="36" height="36" rx="10" fill="rgba(255,255,255,0.14)" stroke="rgba(255,255,255,0.25)"/>
-          <path d="M8 22C11.5 22 13 14 16.5 14C20 14 21 23 24.5 23C26.5 23 27.5 19.5 28.5 18" stroke="white" stroke-width="2.4" stroke-linecap="round"/>
-          <circle cx="25" cy="11" r="2.2" fill="white" fill-opacity="0.85"/>
-        </svg>
-        <div class="brand-text">
-          <span class="brand-name">AER.wave</span>
-          <span class="brand-slogan">Beyond the forecast</span>
-        </div>
+<body data-dayphase="night">
+  <div class="ambient-sky" aria-hidden="true"></div>
+  <div class="app-shell" id="app">
+    <aside class="sidebar" id="sidebar" aria-label="Primary navigation">
+      <div class="sidebar__top">
+        <a href="#home" class="brand" data-nav="home">
+          <img src="assets/logo.png" alt="AER.wave" class="brand__icon" />
+          <span class="brand__text-wrap">
+            <span class="brand__text">AER.wave</span>
+            <span class="brand__tagline">Beyond the forecast</span>
+          </span>
+        </a>
+        <button type="button" class="icon-btn sidebar__toggle" id="sidebarToggleBtn" aria-label="Toggle sidebar" title="Toggle sidebar">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+        </button>
       </div>
 
-      <form class="search-box" id="searchForm">
-        <input type="text" id="cityInput" placeholder="Поиск города..." autocomplete="off" />
-        <button type="submit" aria-label="Search">→</button>
-      </form>
+      <nav class="sidebar__nav" id="desktopNav">
+        <button type="button" class="nav-link is-active" data-section="home">
+          <span class="nav-link__icon" aria-hidden="true">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 10.5L12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1v-9.5z"/></svg>
+          </span>
+          <span class="nav-link__label" data-i18n="nav.home">Главная</span>
+        </button>
+        <button type="button" class="nav-link" data-section="forecast">
+          <span class="nav-link__icon" aria-hidden="true">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="3"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+          </span>
+          <span class="nav-link__label" data-i18n="nav.forecast">Расширенный прогноз</span>
+        </button>
+        <button type="button" class="nav-link" data-section="map">
+          <span class="nav-link__icon" aria-hidden="true">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>
+          </span>
+          <span class="nav-link__label" data-i18n="nav.map">Карта</span>
+        </button>
+        <button type="button" class="nav-link" data-section="favorites">
+          <span class="nav-link__icon" aria-hidden="true">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+          </span>
+          <span class="nav-link__label" data-i18n="nav.favorites">Избранное</span>
+        </button>
+      </nav>
+    </aside>
 
-      <div class="controls">
-        <button class="pill-btn" id="unitToggle" title="Единицы температуры">°C</button>
-        <button class="pill-btn" id="langToggle" title="Язык">RU</button>
-      </div>
-    </header>
-
-    <main class="dashboard-grid">
-      <section class="glass-panel current-card">
-        <div class="current-header">
-          <div>
-            <h1 id="cityName">Бишкек</h1>
-            <p class="subtitle" id="currentDate">—</p>
-          </div>
-          <span class="offline-badge" id="cacheBadge" hidden>Offline cache</span>
+    <div class="workspace">
+      <header class="topbar">
+        <div class="topbar__mobile-brand">
+          <img src="assets/logo.png" alt="AER.wave" class="brand__icon" />
+          <span class="brand__text-wrap">
+            <span class="brand__text">AER.wave</span>
+            <span class="brand__tagline">Beyond the forecast</span>
+          </span>
         </div>
 
-        <div class="temp-row">
-          <div class="temp-main" id="currentTemp">--°</div>
-          <div class="weather-meta">
-            <div class="condition" id="weatherDesc">—</div>
-            <div class="feels-like" id="feelsLike">—</div>
+        <div class="search" id="searchContainer">
+          <div class="search__field">
+            <svg class="search__icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input type="search" id="citySearchInput" class="search__input" autocomplete="off" placeholder="Поиск города..." />
+            <span class="search__spinner" id="searchSpinner" hidden></span>
           </div>
+          <ul class="search__dropdown" id="searchDropdown" role="listbox" hidden></ul>
         </div>
 
-        <div class="metrics-grid">
-          <div class="metric-item">
-            <span class="metric-label" data-i18n="wind">Ветер</span>
-            <span class="metric-val" id="windVal">—</span>
-          </div>
-          <div class="metric-item">
-            <span class="metric-label" data-i18n="humidity">Влажность</span>
-            <span class="metric-val" id="humidityVal">—</span>
-          </div>
-          <div class="metric-item">
-            <span class="metric-label" data-i18n="pressure">Давление</span>
-            <span class="metric-val" id="pressureVal">—</span>
-          </div>
-          <div class="metric-item">
-            <span class="metric-label" data-i18n="uv">УФ-индекс</span>
-            <span class="metric-val" id="uvVal">—</span>
-          </div>
+        <div class="topbar__actions">
+          <button type="button" class="chip-control" id="favoriteToggleBtn" title="Favorites">
+            <span id="favoriteStarIcon">☆</span>
+            <span class="chip-control__text" data-i18n="actions.saveCity">В избранное</span>
+          </button>
+          <button type="button" class="chip-control header-toggle" id="langBtnHeader" aria-label="Language">
+            <span class="header-toggle__tag">Язык</span>
+            <strong class="header-toggle__val" id="langLabelHeader">RU</strong>
+          </button>
+          <button type="button" class="chip-control header-toggle" id="unitBtnHeader" aria-label="Temperature Unit">
+            <span class="header-toggle__tag">Ед.</span>
+            <strong class="header-toggle__val" id="unitLabelHeader">°C</strong>
+          </button>
         </div>
-      </section>
+      </header>
 
-      <section class="glass-panel insights-card">
-        <h2 data-i18n="insightsTitle">Сводка и рекомендации</h2>
-        <p class="insight-text" id="insightText">Загрузка атмосферных данных...</p>
-        <div class="sparklines-wrap">
-          <div class="spark-box">
-            <div class="spark-header">
-              <span data-i18n="tempTrend">Температура (24ч)</span>
-              <span id="tempRange">—</span>
+      <div class="status-banner" id="statusBanner" role="alert" hidden></div>
+
+      <main class="main-view" id="mainView">
+        <!-- SECTION 1: HOME -->
+        <section class="section-view is-active" id="section-home" data-view="home">
+          <div class="home-grid">
+            <article class="panel hero-panel magnetic-card" id="heroPanel">
+              <div class="hero-panel__bg" id="heroBg"></div>
+              <div class="hero-panel__overlay"></div>
+              <div class="hero-panel__content">
+                <div class="hero-panel__header">
+                  <div>
+                    <h1 class="hero-panel__city" id="heroCity">—</h1>
+                    <p class="hero-panel__country" id="heroCountry">—</p>
+                  </div>
+                  <div class="hero-panel__time-box">
+                    <span class="hero-panel__time-label" data-i18n="hero.localTime">Местное время</span>
+                    <span class="hero-panel__time" id="heroLocalTime">--:--</span>
+                  </div>
+                </div>
+
+                <div class="hero-panel__center">
+                  <div class="hero-panel__temp-wrap">
+                    <span class="hero-panel__temp" id="heroTemp">--°</span>
+                    <div class="hero-panel__condition-wrap">
+                      <span class="hero-panel__icon" id="heroWeatherIcon" aria-hidden="true"></span>
+                      <span class="hero-panel__condition" id="heroCondition">—</span>
+                    </div>
+                  </div>
+                  <div class="hero-panel__meta">
+                    <span><span data-i18n="hero.feelsLike">Ощущается как</span>: <strong id="heroFeelsLike">--°</strong></span>
+                    <span class="dot-sep">•</span>
+                    <span><span data-i18n="hero.max">Макс</span>: <strong id="heroMaxTemp">--°</strong></span>
+                    <span class="dot-sep">•</span>
+                    <span><span data-i18n="hero.min">Мин</span>: <strong id="heroMinTemp">--°</strong></span>
+                  </div>
+                </div>
+
+                <div class="hero-panel__credit" id="heroImageCredit" hidden></div>
+              </div>
+            </article>
+
+            <article class="panel insights-panel magnetic-card">
+              <div class="panel__head">
+                <h2 class="panel__title" data-i18n="sections.insights">Weather Insights</h2>
+              </div>
+              <div class="insights-list" id="insightsList"></div>
+            </article>
+
+            <article class="panel metrics-panel magnetic-card">
+              <div class="panel__head">
+                <h2 class="panel__title" data-i18n="sections.metrics">Погодные показатели</h2>
+              </div>
+              <div class="metrics-grid" id="metricsGrid">
+                <div class="metric-item">
+                  <span class="metric-item__label" data-i18n="metrics.humidity">Влажность</span>
+                  <span class="metric-item__value" id="metricHumidity">—</span>
+                </div>
+                <div class="metric-item">
+                  <span class="metric-item__label" data-i18n="metrics.wind">Скорость ветра</span>
+                  <span class="metric-item__value" id="metricWind">—</span>
+                </div>
+                <div class="metric-item">
+                  <span class="metric-item__label" data-i18n="metrics.pressure">Давление</span>
+                  <span class="metric-item__value" id="metricPressure">—</span>
+                </div>
+                <div class="metric-item">
+                  <span class="metric-item__label" data-i18n="metrics.visibility">Видимость</span>
+                  <span class="metric-item__value" id="metricVisibility">—</span>
+                </div>
+                <div class="metric-item">
+                  <span class="metric-item__label" data-i18n="metrics.uv">УФ-индекс</span>
+                  <span class="metric-item__value" id="metricUv">—</span>
+                </div>
+                <div class="metric-item">
+                  <span class="metric-item__label" data-i18n="metrics.dewPoint">Точка росы</span>
+                  <span class="metric-item__value" id="metricDewPoint">—</span>
+                </div>
+              </div>
+            </article>
+
+            <article class="panel daylight-panel magnetic-card">
+              <div class="panel__head">
+                <h2 class="panel__title" data-i18n="sections.daylight">Восход и закат</h2>
+                <span class="daylight-panel__duration" id="daylightDuration">—</span>
+              </div>
+              <div class="daylight-arc">
+                <svg viewBox="0 0 260 95" class="daylight-svg" aria-hidden="true">
+                  <defs>
+                    <linearGradient id="sunArcGrad" x1="0" y1="0" x2="1" y2="0">
+                      <stop offset="0%" stop-color="#FF4566" />
+                      <stop offset="50%" stop-color="#F17BD2" />
+                      <stop offset="100%" stop-color="#49BAFF" />
+                    </linearGradient>
+                  </defs>
+                  <line x1="14" y1="80" x2="246" y2="80" stroke="rgba(244,245,250,0.14)" stroke-width="1.5" stroke-dasharray="4 4" />
+                  <path d="M 20 80 Q 130 -10 240 80" fill="none" stroke="rgba(244,245,250,0.15)" stroke-width="2.5" />
+                  <path id="daylightProgressPath" d="M 20 80 Q 130 -10 240 80" fill="none" stroke="url(#sunArcGrad)" stroke-width="3" stroke-linecap="round" />
+                  <circle id="sunPositionDot" cx="20" cy="80" r="6" fill="#FF4566" />
+                </svg>
+              </div>
+              <div class="daylight-times">
+                <div>
+                  <span class="daylight-times__label" data-i18n="daylight.sunrise">Восход</span>
+                  <strong class="daylight-times__val" id="sunriseTime">--:--</strong>
+                </div>
+                <div class="daylight-times__right">
+                  <span class="daylight-times__label" data-i18n="daylight.sunset">Закат</span>
+                  <strong class="daylight-times__val" id="sunsetTime">--:--</strong>
+                </div>
+              </div>
+            </article>
+
+            <article class="panel hourly-panel magnetic-card">
+              <div class="panel__head panel__head--wrap">
+                <h2 class="panel__title" data-i18n="sections.hourly">Почасовой прогноз (24 ч)</h2>
+                <div class="sparkline-box" id="hourlySparklineBox"></div>
+              </div>
+              <div class="hourly-strip" id="hourlyStrip"></div>
+            </article>
+
+            <article class="panel short-forecast-panel magnetic-card">
+              <div class="panel__head panel__head--wrap">
+                <h2 class="panel__title" data-i18n="sections.shortForecast">Прогноз на 8 дней</h2>
+                <div class="panel__head-right">
+                  <div class="sparkline-box sparkline-box--compact" id="weeklySparklineBox"></div>
+                  <button type="button" class="link-btn" data-goto="forecast" data-i18n="actions.open16Days">16 дней →</button>
+                </div>
+              </div>
+              <div class="short-days-list" id="shortDaysList"></div>
+            </article>
+
+            <article class="panel map-preview-panel magnetic-card">
+              <div class="map-preview-panel__visual">
+                <div class="map-grid-art" aria-hidden="true">
+                  <span class="pulse-pin"></span>
+                </div>
+              </div>
+              <div class="map-preview-panel__body">
+                <h2 class="panel__title" data-i18n="sections.mapPreviewTitle">Погодная карта</h2>
+                <p class="panel__desc" data-i18n="sections.mapPreviewDesc">Интерактивные слои температуры, осадков, ветра и облачности на базе Open-Meteo.</p>
+                <button type="button" class="primary-btn" data-goto="map" data-i18n="actions.openMap">Открыть карту</button>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <!-- SECTION 2: 16-DAY EXTENDED FORECAST -->
+        <section class="section-view" id="section-forecast" data-view="forecast" hidden>
+          <div class="panel magnetic-card">
+            <div class="panel__head panel__head--wrap">
+              <div>
+                <h1 class="section-heading" data-i18n="forecast.title">Расширенный прогноз на 16 дней</h1>
+                <p class="panel__desc" id="forecastSubtitle">—</p>
+              </div>
+              <div class="sparkline-box" id="forecast16SparklineBox"></div>
             </div>
-            <canvas id="tempSparkline" width="260" height="64"></canvas>
-          </div>
-          <div class="spark-box">
-            <div class="spark-header">
-              <span data-i18n="precipTrend">Осадки (24ч)</span>
-              <span id="precipMax">—</span>
+
+            <div class="filter-bar" id="forecastFilterBar" role="group" aria-label="Forecast parameters"></div>
+
+            <div class="table-wrap desktop-tablet-table">
+              <table class="forecast-table" id="forecastTable">
+                <thead id="forecastTableHead"></thead>
+                <tbody id="forecastTableBody"></tbody>
+              </table>
             </div>
-            <canvas id="precipSparkline" width="260" height="64"></canvas>
+
+            <div class="mobile-forecast-list" id="mobileForecastList"></div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      <section class="glass-panel forecast-card">
-        <h2 data-i18n="forecastTitle">Прогноз на 7 дней</h2>
-        <div class="daily-list" id="dailyList"></div>
-      </section>
+        <!-- SECTION 3: INTERACTIVE WEATHER MAP -->
+        <section class="section-view" id="section-map" data-view="map" hidden>
+          <div class="panel map-section-panel magnetic-card">
+            <div class="map-toolbar">
+              <div>
+                <h1 class="section-heading" data-i18n="map.title">Интерактивная погодная карта</h1>
+                <p class="panel__desc" data-i18n="map.gridDisclaimer">Модельная сетка точек Open-Meteo (не спутниковый радар)</p>
+              </div>
+              <div class="layer-switcher" id="mapLayerSwitcher" role="group">
+                <button type="button" class="layer-btn is-active" data-layer="temperature" data-i18n="map.layers.temperature">Температура</button>
+                <button type="button" class="layer-btn" data-layer="precipitation" data-i18n="map.layers.precipitation">Осадки</button>
+                <button type="button" class="layer-btn" data-layer="wind" data-i18n="map.layers.wind">Ветер</button>
+                <button type="button" class="layer-btn" data-layer="cloud" data-i18n="map.layers.cloud">Облачность</button>
+              </div>
+            </div>
 
-      <section class="glass-panel map-card">
-        <div class="map-header">
-          <h2 data-i18n="mapTitle">Карта локации</h2>
-          <span class="coords" id="coordsText">42.87° N, 74.59° E</span>
+            <div class="map-stage">
+              <div id="leafletMap" class="leaflet-canvas"></div>
+              <div class="map-legend" id="mapLegend"></div>
+              <div class="map-loader" id="mapLoader" hidden data-i18n="map.updating">Updating grid...</div>
+            </div>
+          </div>
+        </section>
+
+        <!-- SECTION 4: FAVORITES -->
+        <section class="section-view" id="section-favorites" data-view="favorites" hidden>
+          <div class="panel magnetic-card">
+            <div class="panel__head">
+              <div>
+                <h1 class="section-heading" data-i18n="favorites.title">Избранные города</h1>
+                <p class="panel__desc" id="favoritesCounter">0 / 10</p>
+              </div>
+              <button type="button" class="primary-btn" id="addCurrentFavBtn" data-i18n="favorites.addCurrent">Добавить текущий город</button>
+            </div>
+
+            <div class="favorites-grid" id="favoritesGrid"></div>
+          </div>
+        </section>
+      </main>
+
+      <footer class="app-footer">
+        <div class="app-footer__left">
+          <span class="app-footer__logo">AER.wave</span>
+          <span class="app-footer__desc" data-i18n="footer.desc">Погодный веб-сервис реального времени</span>
         </div>
-        <div id="map"></div>
-      </section>
-    </main>
+        <div class="app-footer__center">
+          <span>Open-Meteo • OpenStreetMap • Wikimedia Commons</span>
+          <span>v4.0</span>
+        </div>
+        <div class="app-footer__right">CREATED BY IBRAIMOVW AMIR</div>
+      </footer>
+    </div>
+
+    <nav class="bottom-nav" id="mobileNav" aria-label="Mobile navigation">
+      <button type="button" class="bottom-nav__item is-active" data-section="home">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 10.5L12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1v-9.5z"/></svg>
+        <span data-i18n="nav.homeShort">Главная</span>
+      </button>
+      <button type="button" class="bottom-nav__item" data-section="forecast">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="3"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+        <span data-i18n="nav.forecastShort">Прогноз</span>
+      </button>
+      <button type="button" class="bottom-nav__item" data-section="map">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/></svg>
+        <span data-i18n="nav.mapShort">Карта</span>
+      </button>
+      <button type="button" class="bottom-nav__item" data-section="favorites">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+        <span data-i18n="nav.favoritesShort">Избранное</span>
+      </button>
+    </nav>
   </div>
 
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="app.js"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script type="module" src="js/app.js"></script>
 </body>
 </html>
