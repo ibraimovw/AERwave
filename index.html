@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AER.wave — Beyond the forecast</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body data-time="day">
+  <div class="bg-orb orb-1"></div>
+  <div class="bg-orb orb-2"></div>
+
+  <div class="app-container">
+    <header class="glass-panel top-bar">
+      <div class="brand">
+        <svg class="logo" width="36" height="36" viewBox="0 0 36 36" fill="none">
+          <rect width="36" height="36" rx="10" fill="rgba(255,255,255,0.14)" stroke="rgba(255,255,255,0.25)"/>
+          <path d="M8 22C11.5 22 13 14 16.5 14C20 14 21 23 24.5 23C26.5 23 27.5 19.5 28.5 18" stroke="white" stroke-width="2.4" stroke-linecap="round"/>
+          <circle cx="25" cy="11" r="2.2" fill="white" fill-opacity="0.85"/>
+        </svg>
+        <div class="brand-text">
+          <span class="brand-name">AER.wave</span>
+          <span class="brand-slogan">Beyond the forecast</span>
+        </div>
+      </div>
+
+      <form class="search-box" id="searchForm">
+        <input type="text" id="cityInput" placeholder="Поиск города..." autocomplete="off" />
+        <button type="submit" aria-label="Search">→</button>
+      </form>
+
+      <div class="controls">
+        <button class="pill-btn" id="unitToggle" title="Единицы температуры">°C</button>
+        <button class="pill-btn" id="langToggle" title="Язык">RU</button>
+      </div>
+    </header>
+
+    <main class="dashboard-grid">
+      <section class="glass-panel current-card">
+        <div class="current-header">
+          <div>
+            <h1 id="cityName">Бишкек</h1>
+            <p class="subtitle" id="currentDate">—</p>
+          </div>
+          <span class="offline-badge" id="cacheBadge" hidden>Offline cache</span>
+        </div>
+
+        <div class="temp-row">
+          <div class="temp-main" id="currentTemp">--°</div>
+          <div class="weather-meta">
+            <div class="condition" id="weatherDesc">—</div>
+            <div class="feels-like" id="feelsLike">—</div>
+          </div>
+        </div>
+
+        <div class="metrics-grid">
+          <div class="metric-item">
+            <span class="metric-label" data-i18n="wind">Ветер</span>
+            <span class="metric-val" id="windVal">—</span>
+          </div>
+          <div class="metric-item">
+            <span class="metric-label" data-i18n="humidity">Влажность</span>
+            <span class="metric-val" id="humidityVal">—</span>
+          </div>
+          <div class="metric-item">
+            <span class="metric-label" data-i18n="pressure">Давление</span>
+            <span class="metric-val" id="pressureVal">—</span>
+          </div>
+          <div class="metric-item">
+            <span class="metric-label" data-i18n="uv">УФ-индекс</span>
+            <span class="metric-val" id="uvVal">—</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="glass-panel insights-card">
+        <h2 data-i18n="insightsTitle">Сводка и рекомендации</h2>
+        <p class="insight-text" id="insightText">Загрузка атмосферных данных...</p>
+        <div class="sparklines-wrap">
+          <div class="spark-box">
+            <div class="spark-header">
+              <span data-i18n="tempTrend">Температура (24ч)</span>
+              <span id="tempRange">—</span>
+            </div>
+            <canvas id="tempSparkline" width="260" height="64"></canvas>
+          </div>
+          <div class="spark-box">
+            <div class="spark-header">
+              <span data-i18n="precipTrend">Осадки (24ч)</span>
+              <span id="precipMax">—</span>
+            </div>
+            <canvas id="precipSparkline" width="260" height="64"></canvas>
+          </div>
+        </div>
+      </section>
+
+      <section class="glass-panel forecast-card">
+        <h2 data-i18n="forecastTitle">Прогноз на 7 дней</h2>
+        <div class="daily-list" id="dailyList"></div>
+      </section>
+
+      <section class="glass-panel map-card">
+        <div class="map-header">
+          <h2 data-i18n="mapTitle">Карта локации</h2>
+          <span class="coords" id="coordsText">42.87° N, 74.59° E</span>
+        </div>
+        <div id="map"></div>
+      </section>
+    </main>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
