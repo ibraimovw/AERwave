@@ -1,253 +1,445 @@
-import { t } from './localization.js';
-import { formatTemp } from './weather.js';
+import {fetchMapGrid} from './api.js';
+import {convertTemp, el, formatTemp} from './helpers.js';
 
-const GRID_CACHE_TTL_MS = 10 * 60 * 1000;
-const gridCache = new Map();
+const TILE_SIZE = 256;
 
-let mapInstance = null;
-let markersLayer = null;
-let currentLayer = 'temperature';
-let currentCenter = { latitude: 42.8746, longitude: 74.5698, name: 'Bishkek' };
-let currentUnit = 'c';
-let debounceTimer = null;
-let activeController = null;
-
-const LAYER_META = {
-  temperature: {
-    gradient: 'linear-gradient(90deg, #49BAFF, #9B79FF, #F17BD2, #FF4566)',
-    minLabel: '-15°',
-    maxLabel: '+35°',
-  },
-  precipitation: {
-    gradient: 'linear-gradient(90deg, #151823, #49BAFF, #9B79FF)',
-    minLabel: '0 mm',
-    maxLabel: '15+ mm',
-  },
-  wind: {
-    gradient: 'linear-gradient(90deg, #49BAFF, #F17BD2, #FF4566)',
-    minLabel: '0 km/h',
-    maxLabel: '60+ km/h',
-  },
-  cloud: {
-    gradient: 'linear-gradient(90deg, #151823, #9297A8, #F4F5FA)',
-    minLabel: '0%',
-    maxLabel: '100%',
-  },
-};
-
-export function initWeatherMap() {
-  const container = document.getElementById('leafletMap');
-  if (!container || mapInstance || typeof window.L === 'undefined') return;
-
-  mapInstance = window.L.map(container, {
-    center: [currentCenter.latitude, currentCenter.longitude],
-    zoom: 7,
-    zoomControl: true,
-  });
-
-  window.L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-    maxZoom: 18,
-  }).addTo(mapInstance);
-
-  markersLayer = window.L.layerGroup().addTo(mapInstance);
-
-  mapInstance.on('moveend', () => {
-    clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(() => {
-      refreshGridData();
-    }, 450);
-  });
-
-  bindLayerButtons();
-  renderLegend();
-  refreshGridData();
+function lonToWorldX(lon, zoom) {
+  return ((lon + 180) / 360) * TILE_SIZE * Math.pow(2, zoom);
 }
 
-export function onMapSectionShown(city, unit = 'c') {
-  currentUnit = unit;
-  if (city) currentCenter = city;
-
-  if (!mapInstance) {
-    initWeatherMap();
-  }
-
-  if (mapInstance) {
-    setTimeout(() => {
-      mapInstance.invalidateSize();
-      if (city) {
-        mapInstance.setView([city.latitude, city.longitude], 7);
-      }
-      renderLegend();
-      refreshGridData();
-    }, 60);
-  }
+function latToWorldY(lat, zoom) {
+  const clamped = Math.max(-85, Math.min(85, lat));
+  const sin = Math.sin((clamped * Math.PI) / 180);
+  return (0.5 - Math.log((1 + sin) / (1 - sin)) / (4 * Math.PI)) * TILE_SIZE * Math.pow(2, zoom);
 }
 
-export function updateMapUnit(unit) {
-  currentUnit = unit;
-  if (mapInstance) {
-    refreshGridData();
-  }
+function worldXToLon(wx, zoom) {
+  return (wx / (TILE_SIZE * Math.pow(2, zoom))) * 360 - 180;
 }
 
-function bindLayerButtons() {
-  const switcher = document.getElementById('mapLayerSwitcher');
-  if (!switcher) return;
-
-  switcher.querySelectorAll('.layer-btn').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const layer = btn.getAttribute('data-layer');
-      if (!layer || layer === currentLayer) return;
-      currentLayer = layer;
-      switcher.querySelectorAll('.layer-btn').forEach((b) => b.classList.toggle('is-active', b === btn));
-      renderLegend();
-      refreshGridData();
-    });
-  });
+function worldYToLat(wy, zoom) {
+  const n = Math.PI - (2 * Math.PI * wy) / (TILE_SIZE * Math.pow(2, zoom));
+  return (180 / Math.PI) * Math.atan(0.5 * (Math.exp(n) - Math.exp(-n)));
 }
 
-function renderLegend() {
-  const legend = document.getElementById('mapLegend');
-  if (!legend) return;
-  const meta = LAYER_META[currentLayer] || LAYER_META.temperature;
-
-  legend.replaceChildren();
-  const title = document.createElement('strong');
-  title.textContent = t(`map.layers.${currentLayer}`);
-
-  const bar = document.createElement('div');
-  bar.className = 'map-legend__bar';
-  bar.style.background = meta.gradient;
-
-  const scale = document.createElement('div');
-  scale.className = 'map-legend__scale';
-  const minSpan = document.createElement('span');
-  minSpan.textContent = meta.minLabel;
-  const maxSpan = document.createElement('span');
-  maxSpan.textContent = meta.maxLabel;
-  scale.append(minSpan, maxSpan);
-
-  legend.append(title, bar, scale);
+function getLayerColor(layer, pt) {
+  if (layer === 'temp') {
+    if (pt.temperature <= -10) return '#3e8cff';
+    if (pt.temperature <= 0) return '#635bff';
+    if (pt.temperature <= 10) return '#b83dff';
+    if (pt.temperature <= 20) return '#f17bd2';
+    if (pt.temperature <= 28) return '#ff4f83';
+    return '#ff2d68';
+  }
+  if (layer === 'precip') {
+    if (pt.precipitation <= 0.1) return '#64748b';
+    if (pt.precipitation <= 1.0) return '#3e8cff';
+    if (pt.precipitation <= 4.0) return '#635bff';
+    return '#b83dff';
+  }
+  if (layer === 'wind') {
+    if (pt.windSpeed < 12) return '#3e8cff';
+    if (pt.windSpeed < 25) return '#635bff';
+    if (pt.windSpeed < 40) return '#b83dff';
+    return '#ff2d68';
+  }
+  if (pt.cloudCover < 25) return '#3e8cff';
+  if (pt.cloudCover < 60) return '#b83dff';
+  return '#cbd5e1';
 }
 
-function buildSamplePoints(bounds) {
-  const south = bounds.getSouth();
-  const north = bounds.getNorth();
-  const west = bounds.getWest();
-  const east = bounds.getEast();
-
-  const points = [];
-  const rows = 3;
-  const cols = 3;
-  for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < cols; c++) {
-      const lat = south + ((r + 0.5) / rows) * (north - south);
-      const lon = west + ((c + 0.5) / cols) * (east - west);
-      points.push({
-        lat: Number(lat.toFixed(2)),
-        lon: Number(lon.toFixed(2)),
-      });
-    }
-  }
-  return points;
+function formatGridValue(layer, pt, unit, t) {
+  if (layer === 'temp') return formatTemp(pt.temperature, unit);
+  if (layer === 'precip') return `${pt.precipitation.toFixed(1)} ${t.map.units.precip}`;
+  if (layer === 'wind') return `${Math.round(pt.windSpeed)} ${t.map.units.wind}`;
+  return `${Math.round(pt.cloudCover)}${t.map.units.clouds}`;
 }
 
-async function fetchPointWeather(lat, lon, signal) {
-  const key = `${lat}_${lon}`;
-  const cached = gridCache.get(key);
-  if (cached && Date.now() - cached.ts < GRID_CACHE_TTL_MS) {
-    return cached.data;
-  }
+export function createWeatherMapView({city, cityName, unit, t}) {
+  let activeLayer = 'temp';
+  let zoom = 6;
+  let centerLat = city.latitude;
+  let centerLon = city.longitude;
+  let gridPoints = [];
+  let selectedPoint = null;
+  let abortCtrl = null;
+  let moveTimer = null;
+  let isLoading = false;
 
-  const url = new URL('https://api.open-meteo.com/v1/forecast');
-  url.searchParams.set('latitude', String(lat));
-  url.searchParams.set('longitude', String(lon));
-  url.searchParams.set('current', 'temperature_2m,precipitation,wind_speed_10m,cloud_cover');
+  const root = el('div', {className: 'view-stack'});
 
-  const res = await fetch(url.toString(), { signal });
-  if (!res.ok) throw new Error(`Map grid HTTP ${res.status}`);
-  const json = await res.json();
-  if (!json.current) throw new Error('Missing current in map grid');
+  // Header panel
+  const refreshLabel = el('span', {}, t.map.refreshBtn);
+  const refreshBtn = el(
+    'button',
+    {
+      type: 'button',
+      className: 'btn-subtle',
+      onClick: () => void loadGrid(),
+    },
+    refreshLabel
+  );
 
-  const item = {
-    lat,
-    lon,
-    tempC: json.current.temperature_2m ?? null,
-    precipMm: json.current.precipitation ?? null,
-    windKmh: json.current.wind_speed_10m ?? null,
-    cloudPct: json.current.cloud_cover ?? null,
-  };
-  gridCache.set(key, { ts: Date.now(), data: item });
-  return item;
-}
-
-function getBadgeStyle(item) {
-  if (currentLayer === 'temperature') {
-    const v = item.tempC ?? 0;
-    const bg = v <= 0 ? '#2b6cb0' : v <= 15 ? '#6b46c1' : v <= 26 ? '#b83280' : '#e53e3e';
-    return { label: formatTemp(item.tempC, currentUnit), bg };
-  }
-  if (currentLayer === 'precipitation') {
-    const v = item.precipMm ?? 0;
-    const bg = v > 0 ? '#2b6cb0' : '#151823';
-    return { label: `${v.toFixed(1)} ${t('map.unitMm') || 'mm'}`, bg };
-  }
-  if (currentLayer === 'wind') {
-    const v = item.windKmh ?? 0;
-    const bg = v >= 30 ? '#e53e3e' : v >= 15 ? '#805ad5' : '#2c5282';
-    return { label: `${Math.round(v)} ${t('map.unitKmh') || 'km/h'}`, bg };
-  }
-  const v = item.cloudPct ?? 0;
-  const bg = v >= 70 ? '#4a5568' : v >= 30 ? '#2d3748' : '#1a202c';
-  return { label: `${Math.round(v)}%`, bg };
-}
-
-async function refreshGridData() {
-  if (!mapInstance || !markersLayer) return;
-
-  if (activeController) activeController.abort();
-  activeController = new AbortController();
-
-  const loader = document.getElementById('mapLoader');
-  if (loader) loader.hidden = false;
-
-  try {
-    const points = buildSamplePoints(mapInstance.getBounds());
-    const results = await Promise.all(
-      points.map((pt) => fetchPointWeather(pt.lat, pt.lon, activeController.signal))
+  const legendContainer = el('div', {className: 'map-legend-items mono'});
+  const layersRow = el('div', {className: 'pill-group'});
+  const layerButtons = {};
+  for (const layer of ['temp', 'precip', 'wind', 'clouds']) {
+    const btn = el(
+      'button',
+      {
+        type: 'button',
+        className: `chip-btn ${layer === activeLayer ? 'active' : ''}`,
+        onClick: () => {
+          activeLayer = layer;
+          Object.entries(layerButtons).forEach(([k, b]) => b.classList.toggle('active', k === layer));
+          renderLegend();
+          renderMarkers();
+        },
+      },
+      t.map.layers[layer]
     );
-
-    markersLayer.clearLayers();
-
-    results.forEach((item) => {
-      const { label, bg } = getBadgeStyle(item);
-      const icon = window.L.divIcon({
-        className: '',
-        html: `<div class="weather-grid-pin" style="background:${bg}">${label}</div>`,
-        iconSize: [74, 28],
-        iconAnchor: [37, 14],
-      });
-
-      const marker = window.L.marker([item.lat, item.lon], { icon });
-      const popupEl = document.createElement('div');
-      popupEl.style.color = '#090A0F';
-      popupEl.style.fontSize = '13px';
-      popupEl.innerHTML = `
-        <strong>${item.lat.toFixed(2)}, ${item.lon.toFixed(2)}</strong><br/>
-        ${t('map.popup.temp')}: ${formatTemp(item.tempC, currentUnit)}<br/>
-        ${t('map.popup.precip')}: ${(item.precipMm ?? 0).toFixed(1)} mm<br/>
-        ${t('map.popup.wind')}: ${Math.round(item.windKmh ?? 0)} km/h<br/>
-        ${t('map.popup.cloud')}: ${Math.round(item.cloudPct ?? 0)}%
-      `;
-      marker.bindPopup(popupEl);
-      markersLayer.addLayer(marker);
-    });
-  } catch (err) {
-    if (err.name !== 'AbortError') {
-      // Fail gracefully without breaking Leaflet UI
-    }
-  } finally {
-    if (loader) loader.hidden = true;
+    layerButtons[layer] = btn;
+    layersRow.appendChild(btn);
   }
+
+  const headerCard = el(
+    'section',
+    {className: 'glass-panel aer-top-accent card-pad'},
+    el(
+      'div',
+      {className: 'row-between gap-md mb-md'},
+      el(
+        'div',
+        {},
+        el('div', {className: 'eyebrow'}, el('span', {className: 'aer-eyebrow-line'}), el('span', {}, cityName)),
+        el('h1', {className: 'page-title'}, t.map.title),
+        el('p', {className: 'muted-sub'}, t.map.subtitle)
+      ),
+      refreshBtn
+    ),
+    el(
+      'div',
+      {className: 'row-between gap-md'},
+      layersRow,
+      el('div', {className: 'map-legend'}, el('span', {className: 'muted-xs'}, `${t.map.legendTitle}:`), legendContainer)
+    )
+  );
+
+  // Viewport DOM
+  const tileLayer = el('div', {className: 'vmap-tiles'});
+  const overlayLayer = el('div', {className: 'vmap-overlays'});
+  const popupBox = el('div', {className: 'vmap-popup glass-panel-elevated', hidden: true});
+
+  const zoomInBtn = el(
+    'button',
+    {
+      type: 'button',
+      className: 'vmap-zoom-btn',
+      'aria-label': 'Zoom in',
+      onClick: () => setZoom(zoom + 1),
+    },
+    '+'
+  );
+  const zoomOutBtn = el(
+    'button',
+    {
+      type: 'button',
+      className: 'vmap-zoom-btn',
+      'aria-label': 'Zoom out',
+      onClick: () => setZoom(zoom - 1),
+    },
+    '−'
+  );
+
+  const viewport = el(
+    'div',
+    {className: 'vmap-viewport'},
+    tileLayer,
+    overlayLayer,
+    popupBox,
+    el('div', {className: 'vmap-controls'}, zoomInBtn, zoomOutBtn),
+    el('div', {className: 'vmap-attrib'}, '© OpenStreetMap · Open-Meteo')
+  );
+
+  const mapCard = el('section', {className: 'glass-panel map-card'}, viewport);
+  const infoBar = el('div', {className: 'glass-subtle disclaimer-bar'}, t.map.disclaimer);
+
+  root.append(headerCard, mapCard, infoBar);
+
+  function renderLegend() {
+    legendContainer.replaceChildren();
+    const items =
+      activeLayer === 'temp'
+        ? [
+            {c: '#3e8cff', l: `${convertTemp(-10, unit)}°`},
+            {c: '#635bff', l: `${convertTemp(0, unit)}°`},
+            {c: '#b83dff', l: `${convertTemp(10, unit)}°`},
+            {c: '#f17bd2', l: `${convertTemp(20, unit)}°`},
+            {c: '#ff2d68', l: `${convertTemp(30, unit)}°+`},
+          ]
+        : activeLayer === 'precip'
+          ? [
+              {c: '#64748b', l: `0`},
+              {c: '#3e8cff', l: `0.5`},
+              {c: '#635bff', l: `2.5`},
+              {c: '#b83dff', l: `4.0+ ${t.map.units.precip}`},
+            ]
+          : activeLayer === 'wind'
+            ? [
+                {c: '#3e8cff', l: `<12`},
+                {c: '#635bff', l: `20`},
+                {c: '#b83dff', l: `35`},
+                {c: '#ff2d68', l: `40+ ${t.map.units.wind}`},
+              ]
+            : [
+                {c: '#3e8cff', l: '0–25%'},
+                {c: '#b83dff', l: '25–60%'},
+                {c: '#cbd5e1', l: '60–100%'},
+              ];
+
+    for (const item of items) {
+      legendContainer.appendChild(
+        el('span', {className: 'legend-item'}, el('span', {className: 'legend-dot', style: {background: item.c}}), item.l)
+      );
+    }
+  }
+
+  function getBounds() {
+    const w = viewport.clientWidth || 720;
+    const h = viewport.clientHeight || 480;
+    const cx = lonToWorldX(centerLon, zoom);
+    const cy = latToWorldY(centerLat, zoom);
+    return {
+      north: worldYToLat(cy - h / 2, zoom),
+      south: worldYToLat(cy + h / 2, zoom),
+      west: worldXToLon(cx - w / 2, zoom),
+      east: worldXToLon(cx + w / 2, zoom),
+    };
+  }
+
+  function renderTiles() {
+    const w = viewport.clientWidth || 720;
+    const h = viewport.clientHeight || 480;
+    const cx = lonToWorldX(centerLon, zoom);
+    const cy = latToWorldY(centerLat, zoom);
+    const maxTile = Math.pow(2, zoom);
+
+    const minTx = Math.floor((cx - w / 2) / TILE_SIZE);
+    const maxTx = Math.floor((cx + w / 2) / TILE_SIZE);
+    const minTy = Math.max(0, Math.floor((cy - h / 2) / TILE_SIZE));
+    const maxTy = Math.min(maxTile - 1, Math.floor((cy + h / 2) / TILE_SIZE));
+
+    const frag = document.createDocumentFragment();
+    for (let ty = minTy; ty <= maxTy; ty++) {
+      for (let tx = minTx; tx <= maxTx; tx++) {
+        const wrappedX = ((tx % maxTile) + maxTile) % maxTile;
+        const left = w / 2 + (tx * TILE_SIZE - cx);
+        const top = h / 2 + (ty * TILE_SIZE - cy);
+        const img = document.createElement('img');
+        img.className = 'vmap-tile';
+        img.draggable = false;
+        img.alt = '';
+        img.src = `https://tile.openstreetmap.org/${zoom}/${wrappedX}/${ty}.png`;
+        img.style.transform = `translate3d(${Math.round(left)}px, ${Math.round(top)}px, 0)`;
+        frag.appendChild(img);
+      }
+    }
+    tileLayer.replaceChildren(frag);
+  }
+
+  function renderMarkers() {
+    const w = viewport.clientWidth || 720;
+    const h = viewport.clientHeight || 480;
+    const cx = lonToWorldX(centerLon, zoom);
+    const cy = latToWorldY(centerLat, zoom);
+    const frag = document.createDocumentFragment();
+
+    // Active city pin
+    const cityPx = w / 2 + (lonToWorldX(city.longitude, zoom) - cx);
+    const cityPy = h / 2 + (latToWorldY(city.latitude, zoom) - cy);
+    const pin = el(
+      'div',
+      {
+        className: 'vmap-city-pin',
+        style: {left: `${cityPx}px`, top: `${cityPy}px`},
+        title: `${cityName} (${t.map.activeCity})`,
+      },
+      el('span', {className: 'vmap-city-dot'}),
+      el('span', {className: 'vmap-city-tag'}, cityName)
+    );
+    frag.appendChild(pin);
+
+    for (const pt of gridPoints) {
+      const px = w / 2 + (lonToWorldX(pt.lon, zoom) - cx);
+      const py = h / 2 + (latToWorldY(pt.lat, zoom) - cy);
+      const color = getLayerColor(activeLayer, pt);
+      const badge = el(
+        'button',
+        {
+          type: 'button',
+          className: 'vmap-badge mono',
+          style: {
+            left: `${px}px`,
+            top: `${py}px`,
+            borderColor: color,
+          },
+          onClick: (e) => {
+            e.stopPropagation();
+            selectedPoint = pt;
+            showPopup(pt, px, py);
+          },
+        },
+        formatGridValue(activeLayer, pt, unit, t)
+      );
+      frag.appendChild(badge);
+    }
+
+    overlayLayer.replaceChildren(frag);
+    if (selectedPoint) {
+      const px = w / 2 + (lonToWorldX(selectedPoint.lon, zoom) - cx);
+      const py = h / 2 + (latToWorldY(selectedPoint.lat, zoom) - cy);
+      popupBox.style.left = `${Math.min(w - 190, Math.max(12, px - 80))}px`;
+      popupBox.style.top = `${Math.max(12, py - 120)}px`;
+    }
+  }
+
+  function showPopup(pt, px, py) {
+    const w = viewport.clientWidth || 720;
+    popupBox.replaceChildren(
+      el(
+        'div',
+        {className: 'row-between mb-xs'},
+        el('strong', {className: 'mono'}, `${pt.lat.toFixed(2)}°, ${pt.lon.toFixed(2)}°`),
+        el(
+          'button',
+          {
+            type: 'button',
+            className: 'vmap-popup-close',
+            onClick: () => {
+              selectedPoint = null;
+              popupBox.hidden = true;
+            },
+          },
+          '×'
+        )
+      ),
+      el('div', {}, `${t.map.layers.temp}: `, el('strong', {}, formatTemp(pt.temperature, unit))),
+      el('div', {}, `${t.map.layers.precip}: `, el('strong', {}, `${pt.precipitation.toFixed(1)} ${t.map.units.precip}`)),
+      el('div', {}, `${t.map.layers.wind}: `, el('strong', {}, `${Math.round(pt.windSpeed)} ${t.map.units.wind}`)),
+      el('div', {}, `${t.map.layers.clouds}: `, el('strong', {}, `${Math.round(pt.cloudCover)}${t.map.units.clouds}`))
+    );
+    popupBox.style.left = `${Math.min(w - 190, Math.max(12, px - 80))}px`;
+    popupBox.style.top = `${Math.max(12, py - 120)}px`;
+    popupBox.hidden = false;
+  }
+
+  function setZoom(nextZoom) {
+    zoom = Math.max(3, Math.min(11, nextZoom));
+    renderTiles();
+    renderMarkers();
+    scheduleGridLoad();
+  }
+
+  function scheduleGridLoad() {
+    if (moveTimer) clearTimeout(moveTimer);
+    moveTimer = setTimeout(() => void loadGrid(), 380);
+  }
+
+  async function loadGrid() {
+    abortCtrl?.abort();
+    abortCtrl = new AbortController();
+    isLoading = true;
+    refreshLabel.textContent = t.map.refreshing;
+    refreshBtn.disabled = true;
+    try {
+      gridPoints = await fetchMapGrid(getBounds(), abortCtrl.signal);
+      if (!abortCtrl.signal.aborted) {
+        renderMarkers();
+      }
+    } catch (err) {
+      if (err.name !== 'AbortError') {
+        // Ignore transient network errors
+      }
+    } finally {
+      if (!abortCtrl.signal.aborted) {
+        isLoading = false;
+        refreshLabel.textContent = t.map.refreshBtn;
+        refreshBtn.disabled = false;
+      }
+    }
+  }
+
+  // Panning via Pointer Events (works smoothly for mouse and mobile touch)
+  let dragging = false;
+  let dragStartX = 0;
+  let dragStartY = 0;
+  let startCenterX = 0;
+  let startCenterY = 0;
+
+  const onPointerDown = (e) => {
+    if (e.target.closest('button')) return;
+    dragging = true;
+    dragStartX = e.clientX;
+    dragStartY = e.clientY;
+    startCenterX = lonToWorldX(centerLon, zoom);
+    startCenterY = latToWorldY(centerLat, zoom);
+    viewport.setPointerCapture?.(e.pointerId);
+  };
+
+  const onPointerMove = (e) => {
+    if (!dragging) return;
+    const dx = e.clientX - dragStartX;
+    const dy = e.clientY - dragStartY;
+    centerLon = worldXToLon(startCenterX - dx, zoom);
+    centerLat = Math.max(-80, Math.min(80, worldYToLat(startCenterY - dy, zoom)));
+    if (centerLon > 180) centerLon -= 360;
+    if (centerLon < -180) centerLon += 360;
+    renderTiles();
+    renderMarkers();
+  };
+
+  const onPointerUp = () => {
+    if (!dragging) return;
+    dragging = false;
+    scheduleGridLoad();
+  };
+
+  const onWheel = (e) => {
+    e.preventDefault();
+    setZoom(e.deltaY < 0 ? zoom + 1 : zoom - 1);
+  };
+
+  viewport.addEventListener('pointerdown', onPointerDown);
+  viewport.addEventListener('pointermove', onPointerMove);
+  viewport.addEventListener('pointerup', onPointerUp);
+  viewport.addEventListener('pointercancel', onPointerUp);
+  viewport.addEventListener('wheel', onWheel, {passive: false});
+  viewport.addEventListener('click', (e) => {
+    if (!e.target.closest('.vmap-badge') && !e.target.closest('.vmap-popup')) {
+      selectedPoint = null;
+      popupBox.hidden = true;
+    }
+  });
+
+  const onResize = () => {
+    renderTiles();
+    renderMarkers();
+  };
+  window.addEventListener('resize', onResize);
+
+  renderLegend();
+  requestAnimationFrame(() => {
+    renderTiles();
+    renderMarkers();
+    void loadGrid();
+  });
+
+  return {
+    el: root,
+    destroy() {
+      if (moveTimer) clearTimeout(moveTimer);
+      abortCtrl?.abort();
+      window.removeEventListener('resize', onResize);
+    },
+  };
 }

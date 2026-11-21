@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <defs>
+    <linearGradient id="aerWaveGrad" x1="8" y1="54" x2="58" y2="10" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#ff2d68" />
+      <stop offset="52%" stop-color="#b83dff" />
+      <stop offset="100%" stop-color="#3e8cff" />
+    </linearGradient>
+    <linearGradient id="aerSunGrad" x1="20" y1="14" x2="44" y2="38" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#3e8cff" />
+      <stop offset="100%" stop-color="#b83dff" />
+    </linearGradient>
+  </defs>
+  <circle cx="32" cy="24" r="10" fill="url(#aerSunGrad)" opacity="0.92" />
+  <path
+    d="M6 37C12.5 28.5 19.5 28.5 26 35C32.5 41.5 39.5 41.5 46 33C49.8 28 53.8 26.5 58 27.8"
+    stroke="url(#aerWaveGrad)"
+    stroke-width="6.5"
+    stroke-linecap="round"
+  />
+  <path
+    d="M8 49C15.5 42.5 22.5 42.5 29.5 47.5C36.5 52.5 43.5 52.5 51 45.5C53.5 43.2 55.8 42 58 41.8"
+    stroke="url(#aerWaveGrad)"
+    stroke-width="4.5"
+    stroke-linecap="round"
+    opacity="0.72"
+  />
+</svg>
