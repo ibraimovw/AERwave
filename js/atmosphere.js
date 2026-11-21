@@ -237,7 +237,7 @@ export function createSparkline({title, points, unitSuffix = '°', height = 78, 
   const svg = document.createElementNS(SVG_NS, 'svg');
   svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
   svg.setAttribute('preserveAspectRatio', 'none');
-  svg.className = 'sparkline-svg';
+  svg.setAttribute('class', 'sparkline-svg');
   svg.style.height = `${height}px`;
 
   const uid = `sp-${Math.random().toString(36).slice(2, 8)}`;
