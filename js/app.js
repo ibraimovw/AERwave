@@ -4,6 +4,7 @@ import {
   fetchCityWeather,
   getCachedWeather,
   getLocalizedCityDisplay,
+  hasIncompleteLocalization,
   resolveCityLocalization,
   searchCities,
 } from './api.js';
@@ -62,6 +63,9 @@ const ALL_METRICS = [
   'cloudCover',
 ];
 
+const DEFAULT_STARTER_CITY = DEFAULT_CITIES[2]; // Москва
+const DEFAULT_FAVORITES = DEFAULT_CITIES.slice(0, 4); // Нью-Йорк, Стокгольм, Москва, Бишкек
+
 function loadSettings() {
   try {
     const raw = localStorage.getItem(SETTINGS_KEY);
@@ -71,7 +75,7 @@ function loadSettings() {
         lang: p.lang === 'en' ? 'en' : 'ru',
         unit: p.unit === 'F' ? 'F' : 'C',
         theme: p.theme === 'light' ? 'light' : 'dark',
-        city: p.city?.latitude ? p.city : DEFAULT_CITIES[0],
+        city: p.city?.latitude ? p.city : DEFAULT_STARTER_CITY,
         sidebarCollapsed: Boolean(p.sidebarCollapsed),
         metrics: Array.isArray(p.metrics) && p.metrics.length ? p.metrics : DEFAULT_METRICS,
       };
@@ -81,7 +85,7 @@ function loadSettings() {
     lang: 'ru',
     unit: 'C',
     theme: 'dark',
-    city: DEFAULT_CITIES[0],
+    city: DEFAULT_STARTER_CITY,
     sidebarCollapsed: false,
     metrics: DEFAULT_METRICS,
   };
@@ -92,10 +96,16 @@ function loadFavorites() {
     const raw = localStorage.getItem(FAVORITES_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) return parsed.slice(0, MAX_FAVORITES);
+      if (Array.isArray(parsed)) {
+        const ids = parsed.map((c) => c?.id).join(',');
+        if (ids === '524901,1850147,2643743') {
+          return DEFAULT_FAVORITES;
+        }
+        return parsed.slice(0, MAX_FAVORITES);
+      }
     }
   } catch {}
-  return DEFAULT_CITIES.slice(0, 3);
+  return DEFAULT_FAVORITES;
 }
 
 function sameCity(a, b) {
@@ -235,61 +245,56 @@ function setMobileMenu(open) {
   renderDrawer();
 }
 
-function makeInstallButton(compact = false) {
+function makeInstallButton(compact = false, extraClass = '') {
   const t = TRANSLATIONS[state.lang];
   if (state.isStandalone) return null;
 
-  if (state.deferredPrompt) {
-    return el(
-      'button',
-      {
-        type: 'button',
-        className: 'btn-primary',
-        style: compact ? {width: '40px', height: '40px', padding: '0'} : {width: '100%'},
-        title: t.pwa.installBtn,
-        onClick: async () => {
-          await state.deferredPrompt.prompt();
-          await state.deferredPrompt.userChoice;
-          state.deferredPrompt = null;
-          renderChrome();
-        },
-      },
-      createIcon('download', 'sm'),
-      !compact && el('span', {}, t.pwa.installShort)
-    );
-  }
+  const triggerInstall = async () => {
+    if (state.deferredPrompt) {
+      await state.deferredPrompt.prompt();
+      await state.deferredPrompt.userChoice;
+      state.deferredPrompt = null;
+      renderChrome();
+      return;
+    }
+    showInstallModal();
+  };
 
-  if (state.isIOS) {
-    return el(
-      'button',
-      {
-        type: 'button',
-        className: 'btn-subtle',
-        style: compact ? {width: '40px', height: '40px', padding: '0'} : {width: '100%'},
-        title: t.pwa.installBtn,
-        onClick: () => showIOSModal(),
-      },
-      createIcon('download', 'sm c-pink'),
-      !compact && el('span', {}, t.pwa.installShort)
-    );
-  }
+  const isTopbar = extraClass.includes('topbar-install-btn');
+  const labelText = isTopbar ? t.pwa.downloadShort : t.pwa.installShort;
 
-  return null;
+  return el(
+    'button',
+    {
+      type: 'button',
+      className: `${state.deferredPrompt || isTopbar ? 'btn-primary' : 'btn-subtle'} ${extraClass}`.trim(),
+      style: compact ? {width: '40px', height: '40px', padding: '0'} : isTopbar ? undefined : {width: '100%'},
+      title: t.pwa.installBtn,
+      'aria-label': t.pwa.installBtn,
+      onClick: triggerInstall,
+    },
+    createIcon('download', state.deferredPrompt || isTopbar ? 'sm' : 'sm c-pink'),
+    !compact && el('span', {}, labelText)
+  );
 }
 
-function showIOSModal() {
+function showInstallModal() {
   const t = TRANSLATIONS[state.lang];
+  const title = state.isIOS ? t.pwa.iosTitle : t.pwa.installGuideTitle;
+  const step1 = state.isIOS ? t.pwa.iosStep1 : t.pwa.genericStep1;
+  const step2 = state.isIOS ? t.pwa.iosStep2 : t.pwa.genericStep2;
+
   setChildren(
     refs.iosModal,
     el(
       'div',
       {className: 'glass-panel-elevated ios-card'},
-      el('h3', {className: 'section-title'}, t.pwa.iosTitle),
+      el('h3', {className: 'section-title'}, title),
       el(
         'ol',
         {className: 'muted-sub', style: {paddingLeft: '18px', margin: '0', lineHeight: '1.6'}},
-        el('li', {}, t.pwa.iosStep1),
-        el('li', {}, t.pwa.iosStep2)
+        el('li', {}, step1),
+        el('li', {}, step2)
       ),
       el(
         'button',
@@ -567,6 +572,9 @@ function renderTopBar() {
     }, 260);
   });
 
+  const topbarInstallBtn = makeInstallButton(false, 'topbar-install-btn');
+  refs.topbar.classList.toggle('is-standalone', state.isStandalone || !topbarInstallBtn);
+
   setChildren(
     refs.topbar,
     el(
@@ -582,6 +590,7 @@ function renderTopBar() {
         dropdown
       )
     ),
+    topbarInstallBtn,
     el(
       'div',
       {className: 'topbar-right'},
@@ -920,107 +929,18 @@ function renderHomeView() {
     )
   );
 
-  let heroBody;
-  if (state.preset === 'tomorrow' && tomorrow) {
-    heroBody = el(
-      'div',
-      {
-        className: 'glass-subtle card-pad row-between gap-md',
-        style: {
-          background: 'rgba(255,255,255,0.12)',
-          borderColor: 'rgba(255,255,255,0.24)',
-          backdropFilter: 'blur(12px)',
-        },
-      },
-      el(
-        'div',
-        {style: {display: 'flex', alignItems: 'center', gap: '16px'}},
-        createWeatherIcon(tomorrow.weatherCode, true, 'xl'),
-        el(
-          'div',
-          {},
-          el(
-            'div',
-            {
-              className: 'muted-xs',
-              style: {textTransform: 'uppercase', letterSpacing: '0.06em', color: '#f8e9ef'},
-            },
-            `${t.home.presetTomorrowLabel} · ${formatDateLabel(tomorrow.date, state.lang, 'full')}`
-          ),
-          el(
-            'div',
-            {className: 'font-display', style: {fontSize: '22px', fontWeight: '700', marginTop: '3px'}},
-            t.wmo[tomorrow.weatherCode] ?? ''
-          )
-        )
-      ),
-      el(
-        'div',
-        {className: 'mono', style: {display: 'flex', gap: '20px', flexWrap: 'wrap'}},
-        el(
-          'span',
-          {className: 'aer-grad-text', style: {fontSize: '20px', fontWeight: '700'}},
-          `${formatTemp(tomorrow.tempMax, state.unit)} / ${formatTemp(tomorrow.tempMin, state.unit)}`
-        ),
-        el('span', {}, `${Math.round(tomorrow.precipProbMax)}%`),
-        el('span', {}, `${Math.round(tomorrow.windMax)} ${t.home.units.kmh}`)
-      )
-    );
-  } else if (state.preset === 'weekend' && weekend.length > 0) {
-    heroBody = el(
-      'div',
-      {className: 'grid-2'},
-      weekend.map((day) =>
-        el(
-          'div',
-          {
-            className: 'glass-subtle card-pad row-between gap-md',
-            style: {
-              background: 'rgba(255,255,255,0.12)',
-              borderColor: 'rgba(255,255,255,0.24)',
-              backdropFilter: 'blur(12px)',
-            },
-          },
-          el(
-            'div',
-            {style: {display: 'flex', alignItems: 'center', gap: '12px'}},
-            createWeatherIcon(day.weatherCode, true, 'lg'),
-            el(
-              'div',
-              {},
-              el('div', {className: 'muted-xs', style: {color: '#f8e9ef'}}, formatDateLabel(day.date, state.lang, 'full')),
-              el('div', {style: {fontWeight: '600'}}, t.wmo[day.weatherCode] ?? '')
-            )
-          ),
-          el(
-            'div',
-            {className: 'mono', style: {textAlign: 'right'}},
-            el(
-              'div',
-              {className: 'aer-grad-text', style: {fontWeight: '700', fontSize: '18px'}},
-              `${formatTemp(day.tempMax, state.unit)} / ${formatTemp(day.tempMin, state.unit)}`
-            ),
-            el(
-              'div',
-              {className: 'muted-xs', style: {color: '#f8e9ef'}},
-              `${Math.round(day.precipProbMax)}% · ${Math.round(day.windMax)} ${t.home.units.kmh}`
-            )
-          )
-        )
-      )
-    );
-  } else {
-    const tempVal = state.preset === 'today' && today ? today.tempMax : w.current.temperature;
-    const code = state.preset === 'today' && today ? today.weatherCode : w.current.weatherCode;
-    const creditLabel = [
-      t.home.photoCredit,
-      state.cityImage?.artist ? `· ${state.cityImage.artist}` : '',
-      state.cityImage?.license ? `(${state.cityImage.license})` : '',
-    ]
-      .filter(Boolean)
-      .join(' ');
+  const creditLabel = [
+    t.home.photoCredit,
+    state.cityImage?.artist ? `· ${state.cityImage.artist}` : '',
+    state.cityImage?.license ? `(${state.cityImage.license})` : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
 
-    heroBody = el(
+  function buildTempHeroBody(isNowMode, isGhost = false) {
+    const tempVal = isNowMode || !today ? w.current.temperature : today.tempMax;
+    const code = isNowMode || !today ? w.current.weatherCode : today.weatherCode;
+    return el(
       'div',
       {className: 'row-between gap-md', style: {alignItems: 'flex-end'}},
       el(
@@ -1036,7 +956,7 @@ function renderHomeView() {
             el(
               'div',
               {className: 'hero-cond'},
-              createWeatherIcon(code, state.preset === 'now' ? w.current.isDay : true, 'lg'),
+              createWeatherIcon(code, isNowMode ? w.current.isDay : true, 'lg'),
               el('span', {}, t.wmo[code] ?? '')
             ),
             el(
@@ -1052,7 +972,7 @@ function renderHomeView() {
         el('p', {className: 'hero-summary'}, generateHeroDailySummary(w, state.unit, state.lang))
       ),
       state.cityImage &&
-        (state.cityImage.sourceUrl
+        (!isGhost && state.cityImage.sourceUrl
           ? el(
               'a',
               {href: state.cityImage.sourceUrl, target: '_blank', rel: 'noreferrer', className: 'hero-credit'},
@@ -1061,6 +981,106 @@ function renderHomeView() {
           : el('span', {className: 'hero-credit'}, creditLabel))
     );
   }
+
+  let overlayBody = null;
+  if (state.preset === 'today') {
+    overlayBody = buildTempHeroBody(false, false);
+  } else if (state.preset === 'tomorrow' && tomorrow) {
+    overlayBody = el(
+      'div',
+      {className: 'hero-preset-card row-between gap-md'},
+      el(
+        'div',
+        {style: {display: 'flex', alignItems: 'center', gap: '14px'}},
+        createWeatherIcon(tomorrow.weatherCode, true, 'xl'),
+        el(
+          'div',
+          {},
+          el(
+            'div',
+            {
+              className: 'muted-xs',
+              style: {textTransform: 'uppercase', letterSpacing: '0.06em', color: '#f8e9ef'},
+            },
+            `${t.home.presetTomorrowLabel} · ${formatDateLabel(tomorrow.date, state.lang, 'full')}`
+          ),
+          el(
+            'div',
+            {className: 'font-display', style: {fontSize: '20px', fontWeight: '700', marginTop: '2px'}},
+            t.wmo[tomorrow.weatherCode] ?? ''
+          )
+        )
+      ),
+      el(
+        'div',
+        {className: 'mono', style: {display: 'flex', gap: '18px', flexWrap: 'wrap'}},
+        el(
+          'span',
+          {className: 'aer-grad-text', style: {fontSize: '19px', fontWeight: '700'}},
+          `${formatTemp(tomorrow.tempMax, state.unit)} / ${formatTemp(tomorrow.tempMin, state.unit)}`
+        ),
+        el('span', {}, `${Math.round(tomorrow.precipProbMax)}%`),
+        el('span', {}, `${Math.round(tomorrow.windMax)} ${t.home.units.kmh}`)
+      )
+    );
+  } else if (state.preset === 'weekend' && weekend.length > 0) {
+    overlayBody = el(
+      'div',
+      {className: 'hero-weekend-grid'},
+      weekend.map((day) =>
+        el(
+          'div',
+          {className: 'hero-weekend-card row-between gap-md'},
+          el(
+            'div',
+            {style: {display: 'flex', alignItems: 'center', gap: '10px', minWidth: '0'}},
+            createWeatherIcon(day.weatherCode, true, 'lg'),
+            el(
+              'div',
+              {style: {minWidth: '0'}},
+              el('div', {className: 'muted-xs', style: {color: '#f8e9ef'}}, formatDateLabel(day.date, state.lang, 'full')),
+              el('div', {style: {fontWeight: '600', fontSize: '13.5px'}}, t.wmo[day.weatherCode] ?? '')
+            )
+          ),
+          el(
+            'div',
+            {className: 'mono', style: {textAlign: 'right', flexShrink: '0'}},
+            el(
+              'div',
+              {className: 'aer-grad-text', style: {fontWeight: '700', fontSize: '16px'}},
+              `${formatTemp(day.tempMax, state.unit)} / ${formatTemp(day.tempMin, state.unit)}`
+            ),
+            el(
+              'div',
+              {className: 'muted-xs', style: {color: '#f8e9ef', fontSize: '11px'}},
+              `${Math.round(day.precipProbMax)}% · ${Math.round(day.windMax)} ${t.home.units.kmh}`
+            )
+          )
+        )
+      )
+    );
+  }
+
+  const nowSizer = el(
+    'div',
+    {
+      className: `hero-bottom-sizer${overlayBody ? ' is-ghost' : ''}`,
+      'aria-hidden': overlayBody ? 'true' : undefined,
+    },
+    buildTempHeroBody(true, Boolean(overlayBody))
+  );
+
+  const heroBottom = el(
+    'div',
+    {className: 'hero-bottom'},
+    nowSizer,
+    overlayBody &&
+      el(
+        'div',
+        {className: 'hero-bottom-overlay'},
+        el('div', {className: 'hero-bottom-overlay-inner'}, overlayBody)
+      )
+  );
 
   const regionLine = [disp.admin1, disp.country].filter(Boolean).join(', ');
   const hero = attachSpotlight(
@@ -1104,7 +1124,7 @@ function renderHomeView() {
           presetBar
         )
       ),
-      el('div', {className: 'hero-bottom'}, heroBody)
+      heroBottom
     )
   );
 
@@ -2456,10 +2476,10 @@ function selectCity(city) {
 
 async function resolveAllLocalizations() {
   const lang = state.lang;
-  if (!state.city.localized?.[lang]) {
+  if (hasIncompleteLocalization(state.city.localized?.[lang], lang)) {
     const updated = await resolveCityLocalization(state.city, lang).catch(() => null);
     if (updated?.localized?.[lang] && sameCity(state.city, updated)) {
-      state.city = {...state.city, localized: {...state.city.localized, ...updated.localized}};
+      state.city = {...state.city, countryCode: updated.countryCode ?? state.city.countryCode, localized: {...state.city.localized, ...updated.localized}};
       if (state.weather) state.weather.city = state.city;
       saveSettings();
       renderChrome();
@@ -2468,7 +2488,7 @@ async function resolveAllLocalizations() {
   }
   await Promise.allSettled(
     state.favorites.map(async (f, i) => {
-      if (f.localized?.[lang]) return;
+      if (!hasIncompleteLocalization(f.localized?.[lang], lang)) return;
       const u = await resolveCityLocalization(f, lang);
       if (u.localized?.[lang]) state.favorites[i] = u;
     })

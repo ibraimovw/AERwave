@@ -5,9 +5,38 @@ const PANORAMA_MEM = new Map();
 
 export const DEFAULT_CITIES = [
   {
+    id: '5128581',
+    name: 'Нью-Йорк',
+    country: 'США',
+    countryCode: 'US',
+    admin1: 'Нью-Йорк',
+    latitude: 40.7143,
+    longitude: -74.006,
+    timezone: 'America/New_York',
+    localized: {
+      ru: {name: 'Нью-Йорк', country: 'США', admin1: 'Нью-Йорк'},
+      en: {name: 'New York', country: 'United States', admin1: 'New York'},
+    },
+  },
+  {
+    id: '2673730',
+    name: 'Стокгольм',
+    country: 'Швеция',
+    countryCode: 'SE',
+    admin1: 'Стокгольм',
+    latitude: 59.3294,
+    longitude: 18.0687,
+    timezone: 'Europe/Stockholm',
+    localized: {
+      ru: {name: 'Стокгольм', country: 'Швеция', admin1: 'Стокгольм'},
+      en: {name: 'Stockholm', country: 'Sweden', admin1: 'Stockholm'},
+    },
+  },
+  {
     id: '524901',
     name: 'Москва',
     country: 'Россия',
+    countryCode: 'RU',
     admin1: 'Москва',
     latitude: 55.7522,
     longitude: 37.6156,
@@ -18,9 +47,24 @@ export const DEFAULT_CITIES = [
     },
   },
   {
+    id: '1528675',
+    name: 'Бишкек',
+    country: 'Кыргызстан',
+    countryCode: 'KG',
+    admin1: 'Чуйская область',
+    latitude: 42.8746,
+    longitude: 74.5698,
+    timezone: 'Asia/Bishkek',
+    localized: {
+      ru: {name: 'Бишкек', country: 'Кыргызстан', admin1: 'Чуйская область'},
+      en: {name: 'Bishkek', country: 'Kyrgyzstan', admin1: 'Chüy'},
+    },
+  },
+  {
     id: '1850147',
     name: 'Токио',
     country: 'Япония',
+    countryCode: 'JP',
     admin1: 'Токио',
     latitude: 35.6895,
     longitude: 139.6917,
@@ -34,6 +78,7 @@ export const DEFAULT_CITIES = [
     id: '2643743',
     name: 'Лондон',
     country: 'Великобритания',
+    countryCode: 'GB',
     admin1: 'Англия',
     latitude: 51.5085,
     longitude: -0.1257,
@@ -41,32 +86,6 @@ export const DEFAULT_CITIES = [
     localized: {
       ru: {name: 'Лондон', country: 'Великобритания', admin1: 'Англия'},
       en: {name: 'London', country: 'United Kingdom', admin1: 'England'},
-    },
-  },
-  {
-    id: '5128581',
-    name: 'Нью-Йорк',
-    country: 'США',
-    admin1: 'Нью-Йорк',
-    latitude: 40.7143,
-    longitude: -74.006,
-    timezone: 'America/New_York',
-    localized: {
-      ru: {name: 'Нью-Йорк', country: 'США', admin1: 'Нью-Йорк'},
-      en: {name: 'New York', country: 'United States', admin1: 'New York'},
-    },
-  },
-  {
-    id: '3413829',
-    name: 'Рейкьявик',
-    country: 'Исландия',
-    admin1: 'Столичный регион',
-    latitude: 64.1355,
-    longitude: -21.8954,
-    timezone: 'Atlantic/Reykjavik',
-    localized: {
-      ru: {name: 'Рейкьявик', country: 'Исландия', admin1: 'Столичный регион'},
-      en: {name: 'Reykjavik', country: 'Iceland', admin1: 'Capital Region'},
     },
   },
 ];
@@ -92,13 +111,71 @@ function writeJson(key, value) {
   }
 }
 
+const REGION_DISPLAY = {};
+
+function localizeCountryName(countryCode, fallbackCountry, lang) {
+  if (countryCode && typeof Intl !== 'undefined' && typeof Intl.DisplayNames === 'function') {
+    try {
+      if (!REGION_DISPLAY[lang]) {
+        REGION_DISPLAY[lang] = new Intl.DisplayNames([lang], {type: 'region'});
+      }
+      const localized = REGION_DISPLAY[lang].of(String(countryCode).toUpperCase());
+      if (localized) return localized;
+    } catch {
+      // Fallback below
+    }
+  }
+  return fallbackCountry ?? '';
+}
+
+function isScriptMismatch(text, lang) {
+  if (!text || !text.trim()) return false;
+  const hasCyr = /[\u0400-\u04FF]/.test(text);
+  const hasLat = /[A-Za-z]/.test(text);
+  if (lang === 'ru') return hasLat && !hasCyr;
+  if (lang === 'en') return hasCyr;
+  return false;
+}
+
+export function hasIncompleteLocalization(loc, lang) {
+  if (!loc || !loc.name) return true;
+  if (isScriptMismatch(loc.name, lang)) return true;
+  if (loc.country && isScriptMismatch(loc.country, lang)) return true;
+  if (loc.admin1 && isScriptMismatch(loc.admin1, lang)) return true;
+  return false;
+}
+
 export function getLocalizedCityDisplay(city, lang) {
+  const defaultMatch = DEFAULT_CITIES.find(
+    (d) =>
+      (city.id && d.id === city.id) ||
+      (Math.abs(d.latitude - city.latitude) < 0.05 && Math.abs(d.longitude - city.longitude) < 0.05)
+  );
+  if (defaultMatch?.localized?.[lang]) {
+    return defaultMatch.localized[lang];
+  }
+
   const direct = city.localized?.[lang];
-  if (direct?.name) return direct;
   const store = readJson(CITY_I18N_KEY);
   const stored = store[cityKey(city)]?.[lang];
-  if (stored?.name) return stored;
-  return {name: city.name, country: city.country || '', admin1: city.admin1 || ''};
+  const base = direct?.name
+    ? direct
+    : stored?.name
+      ? stored
+      : {name: city.name, country: city.country || '', admin1: city.admin1 || ''};
+
+  const name = base.name || city.name;
+  let country = localizeCountryName(city.countryCode, base.country, lang);
+  let admin1 = base.admin1 || '';
+
+  if (country && isScriptMismatch(country, lang)) {
+    country = '';
+  }
+  if (admin1 && isScriptMismatch(admin1, lang)) {
+    admin1 = '';
+  }
+
+  return {name, country, admin1};
 }
 
 export async function searchCities(query, lang, signal) {
@@ -117,18 +194,24 @@ export async function searchCities(query, lang, signal) {
 
   const i18nStore = readJson(CITY_I18N_KEY);
   const mapped = json.results.map((item) => {
-    const loc = {name: item.name, country: item.country ?? '', admin1: item.admin1 ?? ''};
+    const countryCode = item.country_code ? String(item.country_code).toUpperCase() : undefined;
+    const country = localizeCountryName(countryCode, item.country ?? '', lang);
+    const cleanAdmin1 = item.admin1 && !isScriptMismatch(item.admin1, lang) ? item.admin1 : '';
+    const loc = {name: item.name, country, admin1: cleanAdmin1};
     const k = cityKey({latitude: item.latitude, longitude: item.longitude});
-    i18nStore[k] = {...(i18nStore[k] ?? {}), [lang]: loc};
+    if (!hasIncompleteLocalization(loc, lang)) {
+      i18nStore[k] = {...(i18nStore[k] ?? {}), [lang]: loc};
+    }
     return {
       id: String(item.id),
       name: item.name,
-      country: item.country ?? '',
+      country,
+      countryCode,
       admin1: item.admin1 ?? '',
       latitude: item.latitude,
       longitude: item.longitude,
       timezone: item.timezone,
-      localized: {[lang]: loc},
+      localized: !isScriptMismatch(item.name, lang) ? {[lang]: loc} : {},
     };
   });
   writeJson(CITY_I18N_KEY, i18nStore);
@@ -136,12 +219,28 @@ export async function searchCities(query, lang, signal) {
 }
 
 export async function resolveCityLocalization(city, targetLang, signal) {
-  if (city.localized?.[targetLang]?.name) return city;
+  const defaultMatch = DEFAULT_CITIES.find(
+    (d) =>
+      (city.id && d.id === city.id) ||
+      (Math.abs(d.latitude - city.latitude) < 0.05 && Math.abs(d.longitude - city.longitude) < 0.05)
+  );
+  if (defaultMatch?.localized) {
+    return {...city, countryCode: defaultMatch.countryCode, localized: {...defaultMatch.localized, ...city.localized, [targetLang]: defaultMatch.localized[targetLang]}};
+  }
+
   const k = cityKey(city);
   const store = readJson(CITY_I18N_KEY);
-  if (store[k]?.[targetLang]?.name) {
-    return {...city, localized: {...city.localized, [targetLang]: store[k][targetLang]}};
+  const cachedDirect = city.localized?.[targetLang];
+  const cachedStored = store[k]?.[targetLang];
+
+  if (!hasIncompleteLocalization(cachedDirect, targetLang)) {
+    return city;
   }
+  if (!hasIncompleteLocalization(cachedStored, targetLang)) {
+    return {...city, localized: {...city.localized, [targetLang]: cachedStored}};
+  }
+
+  let bestLoc = null;
 
   try {
     const query = city.localized?.en?.name ?? city.localized?.ru?.name ?? city.name;
@@ -150,10 +249,18 @@ export async function resolveCityLocalization(city, targetLang, signal) {
       (c) => Math.abs(c.latitude - city.latitude) < 0.35 && Math.abs(c.longitude - city.longitude) < 0.35
     );
     if (match) {
-      const loc = {name: match.name, country: match.country, admin1: match.admin1};
-      store[k] = {...(store[k] ?? {}), [targetLang]: loc};
-      writeJson(CITY_I18N_KEY, store);
-      return {...city, localized: {...city.localized, [targetLang]: loc}};
+      bestLoc = {
+        name: match.name,
+        country: localizeCountryName(match.countryCode ?? city.countryCode, match.country, targetLang),
+        admin1: match.admin1 && !isScriptMismatch(match.admin1, targetLang) ? match.admin1 : '',
+        countryCode: match.countryCode ?? city.countryCode,
+      };
+      if (!hasIncompleteLocalization(bestLoc, targetLang) && bestLoc.admin1) {
+        const savedLoc = {name: bestLoc.name, country: bestLoc.country, admin1: bestLoc.admin1};
+        store[k] = {...(store[k] ?? {}), [targetLang]: savedLoc};
+        writeJson(CITY_I18N_KEY, store);
+        return {...city, countryCode: bestLoc.countryCode, localized: {...city.localized, [targetLang]: savedLoc}};
+      }
     }
   } catch (err) {
     if (err.name === 'AbortError') throw err;
@@ -169,17 +276,42 @@ export async function resolveCityLocalization(city, targetLang, signal) {
     const res = await fetch(nom.toString(), {signal});
     if (res.ok) {
       const d = await res.json();
-      const name = d.address?.city ?? d.address?.town ?? d.address?.village ?? d.name;
-      if (name) {
-        const loc = {name, country: d.address?.country ?? city.country, admin1: d.address?.state ?? city.admin1};
+      const addr = d.address ?? {};
+      const resolvedName = addr.city ?? addr.town ?? addr.village ?? addr.municipality ?? d.name;
+      const isoCode = addr.country_code ? String(addr.country_code).toUpperCase() : bestLoc?.countryCode ?? city.countryCode;
+      const rawCountry = localizeCountryName(isoCode, addr.country ?? bestLoc?.country ?? city.country, targetLang);
+      const rawAdmin1 = addr.state ?? addr.region ?? addr.county ?? '';
+
+      const finalName =
+        resolvedName && !isScriptMismatch(resolvedName, targetLang)
+          ? resolvedName
+          : bestLoc?.name ?? city.name;
+      const finalCountry = !isScriptMismatch(rawCountry, targetLang)
+        ? rawCountry
+        : bestLoc?.country ?? '';
+      const finalAdmin1 =
+        rawAdmin1 && !isScriptMismatch(rawAdmin1, targetLang)
+          ? rawAdmin1
+          : bestLoc?.admin1 ?? '';
+
+      if (finalName) {
+        const loc = {name: finalName, country: finalCountry, admin1: finalAdmin1};
         store[k] = {...(store[k] ?? {}), [targetLang]: loc};
         writeJson(CITY_I18N_KEY, store);
-        return {...city, localized: {...city.localized, [targetLang]: loc}};
+        return {...city, countryCode: isoCode, localized: {...city.localized, [targetLang]: loc}};
       }
     }
   } catch (err) {
     if (err.name === 'AbortError') throw err;
   }
+
+  if (bestLoc?.name) {
+    const loc = {name: bestLoc.name, country: bestLoc.country, admin1: bestLoc.admin1};
+    store[k] = {...(store[k] ?? {}), [targetLang]: loc};
+    writeJson(CITY_I18N_KEY, store);
+    return {...city, countryCode: bestLoc.countryCode, localized: {...city.localized, [targetLang]: loc}};
+  }
+
   return city;
 }
 

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'aerwave-vanilla-v7-7';
+const CACHE_NAME = 'aerwave-vanilla-v7-9';
 const STATIC_ASSETS = [
   './',
   './index.html',

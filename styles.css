@@ -204,6 +204,22 @@ button { cursor: pointer; background: none; border: 0; }
 }
 @media (hover: none), (pointer: coarse) { .aer-cursor-glow { display: none !important; } }
 
+.aer-safe-top {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: env(safe-area-inset-top, 0px);
+  z-index: 45;
+  pointer-events: none;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  background: linear-gradient(180deg, rgba(8, 6, 11, 0.72) 0%, transparent 100%);
+}
+body.light-theme .aer-safe-top {
+  background: linear-gradient(180deg, rgba(252, 238, 244, 0.78) 0%, transparent 100%);
+}
+
 /* Glass Containers */
 .glass-panel {
   position: relative;
@@ -447,7 +463,7 @@ body.light-theme .btn-theme-circle:hover {
   border-radius: 0;
   border-top: 0; border-bottom: 0; border-left: 0;
   border-right: 1px solid var(--line);
-  padding: 16px 14px;
+  padding: calc(16px + env(safe-area-inset-top, 0px)) 14px 16px;
   user-select: none;
   transition: width 200ms cubic-bezier(0.16, 1, 0.3, 1);
 }
@@ -511,7 +527,15 @@ body.light-theme .nav-btn.active { background: rgba(255, 255, 255, 0.92); border
 .version-brand { font-family: var(--font-ibr); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; }
 .sidebar.collapsed .version-row { justify-content: center; }
 
-.app-shell { position: relative; z-index: 10; transition: padding-left 200ms cubic-bezier(0.16, 1, 0.3, 1); }
+.app-shell {
+  position: relative;
+  z-index: 10;
+  padding-top: env(safe-area-inset-top, 0px);
+  transition: padding-left 200ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+@media (max-width: 767px) and (display-mode: standalone) {
+  .app-shell { padding-top: max(env(safe-area-inset-top, 0px), 12px); }
+}
 .shell-inner { max-width: 1440px; margin: 0 auto; padding: 12px 14px 96px; display: flex; flex-direction: column; gap: 16px; }
 
 @media (min-width: 768px) {
@@ -524,20 +548,30 @@ body.light-theme .nav-btn.active { background: rgba(255, 255, 255, 0.92); border
   .shell-inner { padding: 20px 32px 48px; }
 }
 
-/* TopBar (Mobile: Row 1 = Logo + Switches, Row 2 = Full-width Search) */
+/* TopBar (Mobile: Row 1 = Logo + Switches, Row 2 = Search + Install Button) */
 .topbar {
   padding: 10px 12px;
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
   align-items: center;
-  justify-content: space-between;
   gap: 10px 8px;
   z-index: 30;
   position: relative;
 }
 .topbar-left { display: contents; }
-.mobile-logo { width: 32px; height: 32px; border-radius: 8px; flex-shrink: 0; order: 1; }
-.search-wrap { position: relative; order: 3; flex: 1 0 100%; width: 100%; max-width: 100%; min-width: 0; }
+.mobile-logo { width: 32px; height: 32px; border-radius: 8px; flex-shrink: 0; grid-column: 1; grid-row: 1; }
+.search-wrap { position: relative; grid-column: 1 / 3; grid-row: 2; width: 100%; max-width: none; min-width: 0; }
+.topbar.is-standalone .search-wrap { grid-column: 1 / 4; }
+.topbar-install-btn {
+  grid-column: 3;
+  grid-row: 2;
+  justify-self: end;
+  height: 40px;
+  padding: 0 12px;
+  font-size: 12px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
 .search-icon { position: absolute; left: 13px; top: 50%; transform: translateY(-50%); color: var(--muted); pointer-events: none; }
 .search-input {
   width: 100%; height: 40px; padding: 0 36px 0 40px; border-radius: 12px;
@@ -559,7 +593,7 @@ body.light-theme .nav-btn.active { background: rgba(255, 255, 255, 0.92); border
 .search-item:hover, .search-item.highlighted { background: var(--glass-subtle-bg); border-color: var(--line); }
 .search-sub { font-size: 12px; color: var(--muted); }
 
-.topbar-right { display: flex; align-items: center; gap: 6px; flex-shrink: 0; order: 2; margin-left: auto; }
+.topbar-right { display: flex; align-items: center; gap: 6px; flex-shrink: 0; grid-column: 2 / 4; grid-row: 1; justify-self: end; }
 .topbar .btn-icon { width: 36px; height: 36px; border-radius: 10px; }
 .desktop-only-ctrl { display: none; }
 .mobile-menu-trigger { display: inline-flex; color: var(--text); }
@@ -602,11 +636,12 @@ body.light-theme .seg-btn.active {
   .seg-btn { height: 32px; padding: 0 10px; border-radius: 8px; font-size: 12px; }
 }
 @media (min-width: 768px) {
-  .topbar { flex-wrap: nowrap; padding: 10px 14px; gap: 10px; }
+  .topbar { display: flex; flex-wrap: nowrap; padding: 10px 14px; gap: 10px; }
   .topbar-left { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; order: 1; }
   .mobile-logo { display: none; }
-  .search-wrap { order: unset; flex: 1; max-width: 448px; }
-  .topbar-right { order: 2; margin-left: 0; }
+  .search-wrap { flex: 1; max-width: 448px; }
+  .topbar-install-btn { display: none !important; }
+  .topbar-right { order: 3; margin-left: 0; }
   .mobile-menu-trigger { display: none; }
 }
 @media (min-width: 1024px) {
@@ -650,7 +685,7 @@ body.light-theme .seg-btn.active {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  padding: 16px 20px max(22px, env(safe-area-inset-bottom));
+  padding: calc(16px + env(safe-area-inset-top, 0px)) 20px max(22px, env(safe-area-inset-bottom));
 }
 .mobile-drawer[hidden] { display: none; }
 .drawer-head { display: flex; align-items: center; justify-content: space-between; padding-bottom: 14px; border-bottom: 1px solid var(--line); }
@@ -749,7 +784,40 @@ body.light-theme .hero-card {
   background: rgba(255, 245, 247, 0.94); color: #110a0f; font-weight: 600;
   box-shadow: 0 3px 12px rgba(0, 0, 0, 0.22);
 }
-.hero-bottom { margin-top: 32px; }
+.hero-bottom { position: relative; margin-top: 32px; }
+.hero-bottom-sizer.is-ghost { visibility: hidden; pointer-events: none; user-select: none; }
+.hero-bottom-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+.hero-bottom-overlay::-webkit-scrollbar { display: none; }
+.hero-bottom-overlay-inner { margin-top: auto; width: 100%; }
+.hero-preset-card {
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+.hero-weekend-grid { display: grid; grid-template-columns: 1fr; gap: 8px; }
+.hero-weekend-card {
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+@media (min-width: 640px) {
+  .hero-preset-card { padding: 16px 20px; border-radius: 16px; }
+  .hero-weekend-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  .hero-weekend-card { padding: 14px 16px; border-radius: 16px; }
+}
 .hero-temp-row { display: flex; align-items: center; gap: 22px; flex-wrap: wrap; }
 .hero-temp { font-family: var(--font-display); font-weight: 800; font-size: clamp(56px, 7vw, 72px); line-height: 1; letter-spacing: -0.04em; }
 .hero-cond { display: flex; align-items: center; gap: 10px; font-family: var(--font-display); font-size: 19px; font-weight: 600; color: #fff; }
@@ -929,23 +997,27 @@ body.light-theme .chip-btn.active {
 .scroll-top-btn {
   position: fixed;
   right: 16px;
-  bottom: calc(74px + env(safe-area-inset-bottom));
+  bottom: calc(76px + env(safe-area-inset-bottom, 0px));
   z-index: 40;
-  width: 42px;
-  height: 42px;
+  width: 50px;
+  height: 50px;
   border-radius: 50%;
-  background: rgba(18, 13, 22, 0.82);
+  background: rgba(18, 13, 22, 0.84);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   border: 1px solid var(--line-strong);
   color: var(--text);
   display: grid;
   place-items: center;
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.34);
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.36);
   transition: transform 240ms cubic-bezier(0.22, 1, 0.36, 1), background 180ms ease;
 }
 @media (min-width: 768px) {
-  .scroll-top-btn { right: 24px; bottom: 24px; width: 46px; height: 46px; }
+  .scroll-top-btn { right: 24px; bottom: 24px; width: 54px; height: 54px; }
+}
+.scroll-top-btn .icon-wrap { width: 20px; height: 20px; }
+@media (min-width: 768px) {
+  .scroll-top-btn .icon-wrap { width: 22px; height: 22px; }
 }
 .scroll-top-btn:hover { background: rgba(34, 24, 42, 0.92); transform: translateY(-2px); }
 body.light-theme .scroll-top-btn {

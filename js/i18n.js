@@ -28,10 +28,14 @@ export const TRANSLATIONS = {
     pwa: {
       installBtn: 'Установить приложение',
       installShort: 'Установить',
+      downloadShort: 'Скачать',
       offlineBadge: 'Офлайн — показаны сохранённые данные',
       iosTitle: 'Установка на iPhone / iPad',
       iosStep1: 'Нажмите «Поделиться» в нижней панели Safari',
       iosStep2: 'Выберите «На экран «Домой»» для установки',
+      installGuideTitle: 'Установка приложения AER.wave',
+      genericStep1: 'Откройте меню браузера (⋮ или значок установки в адресной строке)',
+      genericStep2: 'Выберите «Установить приложение» или «На экран «Домой»»',
       close: 'Закрыть',
     },
     dayPhases: {
@@ -258,10 +262,14 @@ export const TRANSLATIONS = {
     pwa: {
       installBtn: 'Install app',
       installShort: 'Install',
+      downloadShort: 'Install',
       offlineBadge: 'Offline — showing cached data',
       iosTitle: 'Install on iPhone / iPad',
       iosStep1: 'Tap the Share button in Safari',
       iosStep2: 'Choose "Add to Home Screen"',
+      installGuideTitle: 'Install AER.wave App',
+      genericStep1: 'Open your browser menu (⋮ or the install icon in the address bar)',
+      genericStep2: 'Choose "Install app" or "Add to Home Screen"',
       close: 'Close',
     },
     dayPhases: {
