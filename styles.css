@@ -603,7 +603,7 @@ body.light-theme .nav-btn.active { background: rgba(255, 255, 255, 0.92); border
 .topbar-right { display: flex; align-items: center; gap: 6px; flex-shrink: 0; grid-column: 2 / 4; grid-row: 1; justify-self: end; }
 .topbar .btn-icon { width: 38px; height: 38px; border-radius: 10px; }
 .desktop-only-ctrl { display: none; }
-.topbar-unit-group { display: none; }
+.seg-group.topbar-unit-group { display: none; }
 .mobile-menu-trigger { display: inline-flex; color: var(--text); width: 40px !important; height: 40px !important; border-radius: 11px !important; }
 .mobile-menu-trigger .icon-wrap { width: 18px; height: 18px; }
 .seg-label { display: none; font-size: 10px; color: var(--text-secondary); padding: 0 6px; }
@@ -662,7 +662,7 @@ body.light-theme .seg-btn.active {
   .mobile-logo { display: none; }
   .search-wrap { flex: 1; max-width: 448px; }
   .topbar-install-btn { display: none !important; }
-  .topbar-unit-group { display: inline-flex; }
+  .seg-group.topbar-unit-group { display: inline-flex; }
   .topbar-right { order: 3; margin-left: 0; }
   .mobile-menu-trigger { display: none; }
 }
