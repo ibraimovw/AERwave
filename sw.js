@@ -1,4 +1,5 @@
-const CACHE_NAME = 'aerwave-vanilla-v7-9';
+// Кэш и список файлов для работы офлайн
+const CACHE_NAME = 'aerwave-vanilla-v7-11';
 const STATIC_ASSETS = [
   './',
   './index.html',
@@ -19,6 +20,7 @@ const STATIC_ASSETS = [
   './assets/pwa-maskable-512x512.png',
 ];
 
+// Сохраняем основные файлы при установке
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches
@@ -28,6 +30,7 @@ self.addEventListener('install', (event) => {
   );
 });
 
+// Удаляем старые версии кэша
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches
@@ -37,12 +40,12 @@ self.addEventListener('activate', (event) => {
   );
 });
 
+// Сначала сеть, при отсутствии интернета — кэш
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
   const url = new URL(event.request.url);
   if (url.origin !== self.location.origin) return;
 
-  // Network-first for code/HTML so fresh deployments apply immediately, with cache fallback offline
   event.respondWith(
     fetch(event.request)
       .then((res) => {

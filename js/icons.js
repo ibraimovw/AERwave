@@ -1,9 +1,12 @@
+// SVG-иконки для интерфейса и погодных состояний
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
+// Создаём SVG-элемент нужного размера
 function makeSvg(pathsMarkup, className = 'icon') {
   const wrap = document.createElement('span');
   wrap.className = `icon-wrap ${className}`;
   wrap.setAttribute('aria-hidden', 'true');
+
   const svg = document.createElementNS(SVG_NS, 'svg');
   svg.setAttribute('viewBox', '0 0 24 24');
   svg.setAttribute('fill', 'none');
@@ -12,6 +15,7 @@ function makeSvg(pathsMarkup, className = 'icon') {
   svg.setAttribute('stroke-linecap', 'round');
   svg.setAttribute('stroke-linejoin', 'round');
   svg.innerHTML = pathsMarkup;
+
   wrap.appendChild(svg);
   return wrap;
 }
@@ -54,13 +58,17 @@ const ICONS = {
   fog: '<path d="M4 14h16M6 18h12M3 10h18"/>',
 };
 
+// Обычная иконка интерфейса
 export function createIcon(name, className = '') {
   return makeSvg(ICONS[name] ?? ICONS.cloud, className);
 }
 
+// Иконка погоды по коду WMO
 export function createWeatherIcon(code, isDay = true, className = 'w-icon') {
   if (code === 0 || code === 1) {
-    return makeSvg(isDay ? ICONS.sun : ICONS.moon, `${className} ${isDay ? 'c-pink' : 'c-blue'}`);
+    const iconName = isDay ? 'sun' : 'moon';
+    const colorClass = isDay ? 'c-pink' : 'c-blue';
+    return makeSvg(ICONS[iconName], `${className} ${colorClass}`);
   }
   if (code === 2 || code === 3) {
     return makeSvg(ICONS.cloud, `${className} c-sky`);
@@ -68,11 +76,16 @@ export function createWeatherIcon(code, isDay = true, className = 'w-icon') {
   if (code === 45 || code === 48) {
     return makeSvg(ICONS.fog, `${className} c-muted`);
   }
-  if ([71, 73, 75, 77, 85, 86].includes(code)) {
+
+  const snowCodes = [71, 73, 75, 77, 85, 86];
+  if (snowCodes.includes(code)) {
     return makeSvg(ICONS.snow, `${className} c-sky`);
   }
-  if ([95, 96, 99].includes(code)) {
+
+  const stormCodes = [95, 96, 99];
+  if (stormCodes.includes(code)) {
     return makeSvg(ICONS.storm, `${className} c-pink`);
   }
+
   return makeSvg(ICONS.rain, `${className} c-sky`);
 }

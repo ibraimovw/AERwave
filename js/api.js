@@ -1,8 +1,10 @@
+// Ключи для хранения кэша в localStorage
 const WEATHER_CACHE_KEY = 'aerwave_vanilla_weather_v7';
 const CITY_I18N_KEY = 'aerwave_vanilla_city_i18n_v7';
 const PANORAMA_KEY = 'aerwave_vanilla_panoramas_v7';
 const PANORAMA_MEM = new Map();
 
+// Список популярных городов по умолчанию
 export const DEFAULT_CITIES = [
   {
     id: '5128581',
@@ -107,12 +109,13 @@ function writeJson(key, value) {
   try {
     localStorage.setItem(key, JSON.stringify(value));
   } catch {
-    // Ignore storage quota errors
+    // Игнорируем ошибку, если память браузера заполнена
   }
 }
 
 const REGION_DISPLAY = {};
 
+// Получаем название страны на нужном языке по коду
 function localizeCountryName(countryCode, fallbackCountry, lang) {
   if (countryCode && typeof Intl !== 'undefined' && typeof Intl.DisplayNames === 'function') {
     try {
@@ -122,12 +125,13 @@ function localizeCountryName(countryCode, fallbackCountry, lang) {
       const localized = REGION_DISPLAY[lang].of(String(countryCode).toUpperCase());
       if (localized) return localized;
     } catch {
-      // Fallback below
+      // Если Intl не сработал, вернём исходное название ниже
     }
   }
   return fallbackCountry ?? '';
 }
 
+// Проверяем, совпадает ли алфавит текста с языком сайта
 function isScriptMismatch(text, lang) {
   if (!text || !text.trim()) return false;
   const hasCyr = /[\u0400-\u04FF]/.test(text);
@@ -145,6 +149,7 @@ export function hasIncompleteLocalization(loc, lang) {
   return false;
 }
 
+// Ищем готовый перевод названия города и страны
 export function getLocalizedCityDisplay(city, lang) {
   const defaultMatch = DEFAULT_CITIES.find(
     (d) =>
@@ -158,29 +163,31 @@ export function getLocalizedCityDisplay(city, lang) {
   const direct = city.localized?.[lang];
   const store = readJson(CITY_I18N_KEY);
   const stored = store[cityKey(city)]?.[lang];
-  const base = direct?.name
-    ? direct
-    : stored?.name
-      ? stored
-      : {name: city.name, country: city.country || '', admin1: city.admin1 || ''};
+
+  let base;
+  if (direct?.name) {
+    base = direct;
+  } else if (stored?.name) {
+    base = stored;
+  } else {
+    base = {name: city.name, country: city.country || '', admin1: city.admin1 || ''};
+  }
 
   const name = base.name || city.name;
   let country = localizeCountryName(city.countryCode, base.country, lang);
   let admin1 = base.admin1 || '';
 
-  if (country && isScriptMismatch(country, lang)) {
-    country = '';
-  }
-  if (admin1 && isScriptMismatch(admin1, lang)) {
-    admin1 = '';
-  }
+  if (country && isScriptMismatch(country, lang)) country = '';
+  if (admin1 && isScriptMismatch(admin1, lang)) admin1 = '';
 
   return {name, country, admin1};
 }
 
+// Поиск городов по названию через Open-Meteo Geocoding
 export async function searchCities(query, lang, signal) {
   const trimmed = query.trim();
   if (trimmed.length < 2) return [];
+
   const url = new URL('https://geocoding-api.open-meteo.com/v1/search');
   url.searchParams.set('name', trimmed);
   url.searchParams.set('count', '8');
@@ -193,16 +200,20 @@ export async function searchCities(query, lang, signal) {
   if (!json.results) return [];
 
   const i18nStore = readJson(CITY_I18N_KEY);
-  const mapped = json.results.map((item) => {
+  const mapped = [];
+
+  for (const item of json.results) {
     const countryCode = item.country_code ? String(item.country_code).toUpperCase() : undefined;
     const country = localizeCountryName(countryCode, item.country ?? '', lang);
     const cleanAdmin1 = item.admin1 && !isScriptMismatch(item.admin1, lang) ? item.admin1 : '';
     const loc = {name: item.name, country, admin1: cleanAdmin1};
     const k = cityKey({latitude: item.latitude, longitude: item.longitude});
+
     if (!hasIncompleteLocalization(loc, lang)) {
       i18nStore[k] = {...(i18nStore[k] ?? {}), [lang]: loc};
     }
-    return {
+
+    mapped.push({
       id: String(item.id),
       name: item.name,
       country,
@@ -212,12 +223,14 @@ export async function searchCities(query, lang, signal) {
       longitude: item.longitude,
       timezone: item.timezone,
       localized: !isScriptMismatch(item.name, lang) ? {[lang]: loc} : {},
-    };
-  });
+    });
+  }
+
   writeJson(CITY_I18N_KEY, i18nStore);
   return mapped;
 }
 
+// Догружаем перевод города и области при смене языка
 export async function resolveCityLocalization(city, targetLang, signal) {
   const defaultMatch = DEFAULT_CITIES.find(
     (d) =>
@@ -225,7 +238,11 @@ export async function resolveCityLocalization(city, targetLang, signal) {
       (Math.abs(d.latitude - city.latitude) < 0.05 && Math.abs(d.longitude - city.longitude) < 0.05)
   );
   if (defaultMatch?.localized) {
-    return {...city, countryCode: defaultMatch.countryCode, localized: {...defaultMatch.localized, ...city.localized, [targetLang]: defaultMatch.localized[targetLang]}};
+    return {
+      ...city,
+      countryCode: defaultMatch.countryCode,
+      localized: {...defaultMatch.localized, ...city.localized, [targetLang]: defaultMatch.localized[targetLang]},
+    };
   }
 
   const k = cityKey(city);
@@ -233,15 +250,14 @@ export async function resolveCityLocalization(city, targetLang, signal) {
   const cachedDirect = city.localized?.[targetLang];
   const cachedStored = store[k]?.[targetLang];
 
-  if (!hasIncompleteLocalization(cachedDirect, targetLang)) {
-    return city;
-  }
+  if (!hasIncompleteLocalization(cachedDirect, targetLang)) return city;
   if (!hasIncompleteLocalization(cachedStored, targetLang)) {
     return {...city, localized: {...city.localized, [targetLang]: cachedStored}};
   }
 
   let bestLoc = null;
 
+  // Сначала пробуем найти город через геокодинг Open-Meteo
   try {
     const query = city.localized?.en?.name ?? city.localized?.ru?.name ?? city.name;
     const candidates = await searchCities(query, targetLang, signal);
@@ -266,6 +282,7 @@ export async function resolveCityLocalization(city, targetLang, signal) {
     if (err.name === 'AbortError') throw err;
   }
 
+  // Запасной вариант через обратный поиск OpenStreetMap
   try {
     const nom = new URL('https://nominatim.openstreetmap.org/reverse');
     nom.searchParams.set('format', 'jsonv2');
@@ -273,12 +290,15 @@ export async function resolveCityLocalization(city, targetLang, signal) {
     nom.searchParams.set('lon', city.longitude.toFixed(4));
     nom.searchParams.set('zoom', '10');
     nom.searchParams.set('accept-language', targetLang);
+
     const res = await fetch(nom.toString(), {signal});
     if (res.ok) {
       const d = await res.json();
       const addr = d.address ?? {};
       const resolvedName = addr.city ?? addr.town ?? addr.village ?? addr.municipality ?? d.name;
-      const isoCode = addr.country_code ? String(addr.country_code).toUpperCase() : bestLoc?.countryCode ?? city.countryCode;
+      const isoCode = addr.country_code
+        ? String(addr.country_code).toUpperCase()
+        : bestLoc?.countryCode ?? city.countryCode;
       const rawCountry = localizeCountryName(isoCode, addr.country ?? bestLoc?.country ?? city.country, targetLang);
       const rawAdmin1 = addr.state ?? addr.region ?? addr.county ?? '';
 
@@ -322,16 +342,19 @@ export function getCachedWeather(city) {
   return {...entry, isCached: true, cachedAt: entry.fetchedAt};
 }
 
+// Запрос качества воздуха (AQI)
 export async function fetchAirQuality(city, signal) {
   try {
     const url = new URL('https://air-quality-api.open-meteo.com/v1/air-quality');
     url.searchParams.set('latitude', city.latitude.toFixed(4));
     url.searchParams.set('longitude', city.longitude.toFixed(4));
     url.searchParams.set('current', 'european_aqi,us_aqi,pm10,pm2_5,nitrogen_dioxide,ozone');
+
     const res = await fetch(url.toString(), {signal});
     if (!res.ok) return null;
     const json = await res.json();
     if (!json.current) return null;
+
     return {
       europeanAqi: Math.round(json.current.european_aqi ?? 0),
       usAqi: Math.round(json.current.us_aqi ?? 0),
@@ -346,6 +369,31 @@ export async function fetchAirQuality(city, signal) {
   }
 }
 
+function averageList(numbers, fallback) {
+  if (!numbers || numbers.length === 0) return Math.round(fallback);
+  let total = 0;
+  for (const num of numbers) {
+    total += num;
+  }
+  return Math.round(total / numbers.length);
+}
+
+// Сохраняем прогноз в локальный кэш (до 15 городов)
+function saveWeatherCache(city, data) {
+  const cacheStore = readJson(WEATHER_CACHE_KEY);
+  cacheStore[cityKey(city)] = data;
+
+  const entries = Object.entries(cacheStore).sort((a, b) => b[1].fetchedAt - a[1].fetchedAt);
+  const trimmed = {};
+  const limit = Math.min(15, entries.length);
+  for (let i = 0; i < limit; i++) {
+    const [k, v] = entries[i];
+    trimmed[k] = v;
+  }
+  writeJson(WEATHER_CACHE_KEY, trimmed);
+}
+
+// Загружаем прогноз погоды на 16 дней и качество воздуха
 export async function fetchCityWeather(city, signal) {
   const url = new URL('https://api.open-meteo.com/v1/forecast');
   url.searchParams.set('latitude', city.latitude.toFixed(4));
@@ -369,37 +417,48 @@ export async function fetchCityWeather(city, signal) {
   if (!res.ok) throw new Error(`Weather API error: ${res.status}`);
   const raw = await res.json();
 
-  const hourly = raw.hourly.time.map((time, i) => ({
-    time,
-    temperature: raw.hourly.temperature_2m[i] ?? 0,
-    humidity: raw.hourly.relative_humidity_2m[i] ?? 0,
-    apparentTemperature: raw.hourly.apparent_temperature[i] ?? 0,
-    precipProb: raw.hourly.precipitation_probability[i] ?? 0,
-    precipitation: raw.hourly.precipitation[i] ?? 0,
-    weatherCode: raw.hourly.weather_code[i] ?? 0,
-    pressure: raw.hourly.pressure_msl[i] ?? 1013,
-    windSpeed: raw.hourly.wind_speed_10m[i] ?? 0,
-    windGusts: raw.hourly.wind_gusts_10m?.[i] ?? raw.hourly.wind_speed_10m[i] ?? 0,
-    visibility: raw.hourly.visibility[i] ?? 10000,
-    uvIndex: raw.hourly.uv_index[i] ?? 0,
-    cloudCover: raw.hourly.cloud_cover[i] ?? 0,
-    isDay: (raw.hourly.is_day[i] ?? 1) === 1,
-    dewPoint: raw.hourly.dew_point_2m[i] ?? 0,
-  }));
+  // Собираем почасовые данные
+  const hourly = [];
+  for (let i = 0; i < raw.hourly.time.length; i++) {
+    hourly.push({
+      time: raw.hourly.time[i],
+      temperature: raw.hourly.temperature_2m[i] ?? 0,
+      humidity: raw.hourly.relative_humidity_2m[i] ?? 0,
+      apparentTemperature: raw.hourly.apparent_temperature[i] ?? 0,
+      precipProb: raw.hourly.precipitation_probability[i] ?? 0,
+      precipitation: raw.hourly.precipitation[i] ?? 0,
+      weatherCode: raw.hourly.weather_code[i] ?? 0,
+      pressure: raw.hourly.pressure_msl[i] ?? 1013,
+      windSpeed: raw.hourly.wind_speed_10m[i] ?? 0,
+      windGusts: raw.hourly.wind_gusts_10m?.[i] ?? raw.hourly.wind_speed_10m[i] ?? 0,
+      visibility: raw.hourly.visibility[i] ?? 10000,
+      uvIndex: raw.hourly.uv_index[i] ?? 0,
+      cloudCover: raw.hourly.cloud_cover[i] ?? 0,
+      isDay: (raw.hourly.is_day[i] ?? 1) === 1,
+      dewPoint: raw.hourly.dew_point_2m[i] ?? 0,
+    });
+  }
 
+  // Группируем почасовые значения по дням для средних показателей
   const dailyBuckets = new Map();
   for (const h of hourly) {
     const dayKey = h.time.slice(0, 10);
-    const list = dailyBuckets.get(dayKey) ?? [];
-    list.push(h);
-    dailyBuckets.set(dayKey, list);
+    let bucket = dailyBuckets.get(dayKey);
+    if (!bucket) {
+      bucket = {humidity: [], pressure: [], clouds: []};
+      dailyBuckets.set(dayKey, bucket);
+    }
+    bucket.humidity.push(h.humidity);
+    bucket.pressure.push(h.pressure);
+    bucket.clouds.push(h.cloudCover);
   }
 
-  const daily = raw.daily.time.map((date, i) => {
-    const bucket = dailyBuckets.get(date) ?? [];
-    const avg = (arr) =>
-      arr.length > 0 ? Math.round(arr.reduce((a, b) => a + b, 0) / arr.length) : 0;
-    return {
+  // Собираем дневной прогноз
+  const daily = [];
+  for (let i = 0; i < raw.daily.time.length; i++) {
+    const date = raw.daily.time[i];
+    const bucket = dailyBuckets.get(date);
+    daily.push({
       date,
       weatherCode: raw.daily.weather_code[i] ?? 0,
       tempMax: raw.daily.temperature_2m_max[i] ?? 0,
@@ -412,11 +471,11 @@ export async function fetchCityWeather(city, signal) {
       precipSum: raw.daily.precipitation_sum[i] ?? 0,
       precipProbMax: raw.daily.precipitation_probability_max[i] ?? 0,
       windMax: raw.daily.wind_speed_10m_max[i] ?? 0,
-      humidityMean: bucket.length > 0 ? avg(bucket.map((b) => b.humidity)) : Math.round(raw.current.relative_humidity_2m),
-      pressureMean: bucket.length > 0 ? avg(bucket.map((b) => b.pressure)) : Math.round(raw.current.pressure_msl),
-      cloudCoverMean: bucket.length > 0 ? avg(bucket.map((b) => b.cloudCover)) : Math.round(raw.current.cloud_cover),
-    };
-  });
+      humidityMean: averageList(bucket?.humidity, raw.current.relative_humidity_2m),
+      pressureMean: averageList(bucket?.pressure, raw.current.pressure_msl),
+      cloudCoverMean: averageList(bucket?.clouds, raw.current.cloud_cover),
+    });
+  }
 
   const data = {
     city,
@@ -444,21 +503,16 @@ export async function fetchCityWeather(city, signal) {
     isCached: false,
   };
 
-  const cacheStore = readJson(WEATHER_CACHE_KEY);
-  cacheStore[cityKey(city)] = data;
-  const trimmed = Object.fromEntries(
-    Object.entries(cacheStore)
-      .sort((a, b) => b[1].fetchedAt - a[1].fetchedAt)
-      .slice(0, 15)
-  );
-  writeJson(WEATHER_CACHE_KEY, trimmed);
+  saveWeatherCache(city, data);
   return data;
 }
 
+// Сетка точек погоды для карты
 export async function fetchMapGrid(bounds, signal) {
   const latSpan = Math.max(0.5, bounds.north - bounds.south);
   const lonSpan = Math.max(0.5, bounds.east - bounds.west);
   const coords = [];
+
   for (let r = 0; r < 3; r++) {
     const lat = bounds.south + ((r + 0.5) / 3) * latSpan;
     for (let c = 0; c < 4; c++) {
@@ -468,14 +522,17 @@ export async function fetchMapGrid(bounds, signal) {
       coords.push({lat: Math.max(-85, Math.min(85, lat)), lon});
     }
   }
+
   const url = new URL('https://api.open-meteo.com/v1/forecast');
   url.searchParams.set('latitude', coords.map((p) => p.lat.toFixed(3)).join(','));
   url.searchParams.set('longitude', coords.map((p) => p.lon.toFixed(3)).join(','));
   url.searchParams.set('current', 'temperature_2m,precipitation,wind_speed_10m,cloud_cover');
+
   const res = await fetch(url.toString(), {signal});
   if (!res.ok) throw new Error(`Map grid error: ${res.status}`);
   const json = await res.json();
   const list = Array.isArray(json) ? json : [json];
+
   return list.map((item, idx) => ({
     lat: item.latitude ?? coords[idx].lat,
     lon: item.longitude ?? coords[idx].lon,
@@ -497,6 +554,7 @@ function haversineKm(lat1, lon1, lat2, lon2) {
   return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+// Отсеиваем флаги, гербы и мелкие картинки
 function validPhoto(title, w, h, url) {
   if (!/\.(jpe?g|png|webp)(\?|$)/i.test(url)) return false;
   const file = url.split('?')[0]?.split('/').pop() ?? '';
@@ -506,6 +564,7 @@ function validPhoto(title, w, h, url) {
   return ratio >= 1.15 && ratio <= 4.2;
 }
 
+// Ищем фото города в Википедии
 export async function fetchCityPanorama(city, signal) {
   const k = cityKey(city);
   if (PANORAMA_MEM.has(k)) return PANORAMA_MEM.get(k);
@@ -533,6 +592,7 @@ export async function fetchCityPanorama(city, signal) {
       const d = await res.json();
       if (d.type === 'disambiguation') continue;
       if (d.coordinates && haversineKm(city.latitude, city.longitude, d.coordinates.lat, d.coordinates.lon) > 150) continue;
+
       const img = d.originalimage ?? d.thumbnail;
       if (img?.source && validPhoto(d.title ?? c.title, img.width, img.height, img.source)) {
         const result = {url: img.source, title: d.title ?? c.title, sourceUrl: d.content_urls?.desktop?.page};

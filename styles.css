@@ -4,7 +4,7 @@
   --font-body: "Onest", -apple-system, BlinkMacSystemFont, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 
-  /* Strawberry Obsidian & Architectural Glass Palette (Dark Default) */
+  /* Основная тёмная палитра */
   --bg: #08060b;
   --surface: #100c14;
   --surface2: #191320;
@@ -22,7 +22,7 @@
   --spark-max: #fb7185;
   --spark-min: #a5b4fc;
 
-  /* Clean Translucent Glass (Dark - airy, crisp, not murky) */
+  /* Полупрозрачное стекло для карточек */
   --glass-bg: linear-gradient(155deg, rgba(255, 240, 245, 0.082), rgba(255, 240, 245, 0.024));
   --glass-bg-elevated: rgba(18, 13, 22, 0.80);
   --glass-subtle-bg: rgba(255, 240, 245, 0.055);
@@ -30,7 +30,7 @@
   --cursor-glow-color: rgba(251, 113, 133, 0.12);
   --drawer-bg: rgba(14, 10, 18, 0.90);
 
-  /* Combined DayPhase + Weather atmospheric layers */
+  /* Фоновые слои под время суток и погоду */
   --phase-orb-1: radial-gradient(62% 54% at 15% 12%, rgba(244, 63, 94, 0.14) 0%, rgba(244, 63, 94, 0.045) 38%, transparent 72%);
   --phase-orb-2: radial-gradient(56% 50% at 86% 18%, rgba(129, 140, 248, 0.13) 0%, rgba(129, 140, 248, 0.04) 40%, transparent 72%);
   --phase-orb-3: radial-gradient(60% 52% at 50% 96%, rgba(192, 132, 252, 0.09) 0%, rgba(192, 132, 252, 0.025) 42%, transparent 74%);
@@ -78,7 +78,7 @@ body[data-weather="cloudy"] {
   --weather-wash: radial-gradient(95% 70% at 50% 12%, rgba(244, 180, 200, 0.07) 0%, transparent 74%);
 }
 
-/* Light Theme ("Strawberry Milk & Sakura Mist" palette — warm berry blush, never plain white) */
+/* Светлая клубничная тема */
 body.light-theme {
   --bg: #fceef4;
   --surface: #fff7fa;
@@ -178,7 +178,7 @@ button { cursor: pointer; background: none; border: 0; }
 .icon-wrap.xl { width: 38px; height: 38px; }
 .icon-wrap.sm { width: 15px; height: 15px; }
 
-/* Multi-plane Atmospheric Backdrop with Scroll Depth */
+/* Фоновая атмосфера с глубиной при прокрутке */
 .aer-atmosphere {
   position: fixed;
   inset: -40px 0;
@@ -220,7 +220,7 @@ body.light-theme .aer-safe-top {
   background: linear-gradient(180deg, rgba(252, 238, 244, 0.78) 0%, transparent 100%);
 }
 
-/* Glass Containers */
+/* Стеклянные контейнеры */
 .glass-panel {
   position: relative;
   background: var(--glass-bg);
@@ -285,6 +285,13 @@ body.light-theme .glass-panel.glass-spotlight:hover {
   -webkit-background-clip: text;
   color: transparent;
 }
+.aer-hero-temp-text {
+  background: linear-gradient(135deg, #ffffff 0%, #f9eef4 55%, #ddd6fe 100%);
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 4px 18px rgba(8, 6, 11, 0.36));
+}
 .aer-brand-mark {
   font-family: var(--font-ibr);
   font-weight: 800;
@@ -304,7 +311,7 @@ body.light-theme .glass-panel.glass-spotlight:hover {
   box-shadow: 0 0 10px rgba(251, 113, 133, 0.5);
 }
 
-/* Hero technical corner brackets */
+/* Уголки на главной карточке города */
 .aer-corner {
   position: absolute;
   width: 20px;
@@ -325,7 +332,7 @@ body.light-theme .glass-panel.glass-spotlight:hover {
 .aer-corner.bl { bottom: 14px; left: 14px; transform: rotate(-90deg); }
 .aer-corner.br { bottom: 14px; right: 14px; transform: rotate(180deg); }
 
-/* Magnetic interactive control motion */
+/* Магнитный эффект и нажатие кнопок */
 .btn-primary,
 .btn-subtle,
 .btn-icon,
@@ -452,7 +459,7 @@ body.light-theme .btn-theme-circle:hover {
   border-color: rgba(190, 24, 93, 0.42);
 }
 
-/* Fixed Flush-Left Sidebar (Desktop/Tablet) */
+/* Боковая панель (ПК и планшет) */
 .sidebar {
   display: none;
   flex-direction: column;
@@ -548,7 +555,7 @@ body.light-theme .nav-btn.active { background: rgba(255, 255, 255, 0.92); border
   .shell-inner { padding: 20px 32px 48px; }
 }
 
-/* TopBar (Mobile: Row 1 = Logo + Switches, Row 2 = Search + Install Button) */
+/* Верхняя панель и строка поиска */
 .topbar {
   padding: 10px 12px;
   display: grid;
@@ -594,9 +601,11 @@ body.light-theme .nav-btn.active { background: rgba(255, 255, 255, 0.92); border
 .search-sub { font-size: 12px; color: var(--muted); }
 
 .topbar-right { display: flex; align-items: center; gap: 6px; flex-shrink: 0; grid-column: 2 / 4; grid-row: 1; justify-self: end; }
-.topbar .btn-icon { width: 36px; height: 36px; border-radius: 10px; }
+.topbar .btn-icon { width: 38px; height: 38px; border-radius: 10px; }
 .desktop-only-ctrl { display: none; }
-.mobile-menu-trigger { display: inline-flex; color: var(--text); }
+.topbar-unit-group { display: none; }
+.mobile-menu-trigger { display: inline-flex; color: var(--text); width: 40px !important; height: 40px !important; border-radius: 11px !important; }
+.mobile-menu-trigger .icon-wrap { width: 18px; height: 18px; }
 .seg-label { display: none; font-size: 10px; color: var(--text-secondary); padding: 0 6px; }
 
 .seg-group {
@@ -605,6 +614,18 @@ body.light-theme .nav-btn.active { background: rgba(255, 255, 255, 0.92); border
   background: rgba(255, 240, 245, 0.085);
   border: 1px solid rgba(255, 228, 236, 0.20);
   box-shadow: inset 0 1px 0 rgba(255, 240, 245, 0.12);
+}
+.topbar-lang-group {
+  height: 39px;
+  padding: 3.5px;
+  border-radius: 11px;
+  gap: 3px;
+}
+.topbar-lang-group .seg-btn {
+  height: 30px;
+  padding: 0 9px;
+  font-size: 12px;
+  border-radius: 8px;
 }
 body.light-theme .seg-group {
   background: rgba(255, 255, 255, 0.84);
@@ -641,6 +662,7 @@ body.light-theme .seg-btn.active {
   .mobile-logo { display: none; }
   .search-wrap { flex: 1; max-width: 448px; }
   .topbar-install-btn { display: none !important; }
+  .topbar-unit-group { display: inline-flex; }
   .topbar-right { order: 3; margin-left: 0; }
   .mobile-menu-trigger { display: none; }
 }
@@ -653,7 +675,7 @@ body.light-theme .seg-btn.active {
   padding: 8px 12px; font-size: 12px; color: var(--pink);
 }
 
-/* Mobile Bottom Dock */
+/* Нижняя панель на телефоне */
 .mobile-dock {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 40;
   border-radius: 0; border-left: 0; border-right: 0; border-bottom: 0;
@@ -672,7 +694,7 @@ body.light-theme .seg-btn.active {
   border-radius: 99px; background: var(--grad);
 }
 
-/* Redesigned Opaque Scroll-Locked Mobile Menu Drawer */
+/* Мобильное меню на весь экран */
 .mobile-drawer {
   position: fixed;
   inset: 0;
@@ -714,7 +736,7 @@ body.light-theme .drawer-link.active {
 .drawer-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .drawer-theme-btn { grid-column: 1 / -1; height: 44px; font-size: 12px; }
 
-/* View Layout & Typography Hierarchy */
+/* Отступы и заголовки разделов */
 .view-stack { display: flex; flex-direction: column; gap: 20px; }
 .card-pad { padding: 20px; }
 @media (min-width: 640px) { .card-pad { padding: 24px; } }
@@ -736,7 +758,7 @@ body.light-theme .drawer-link.active {
 .muted-sub { margin: 4px 0 0; font-size: 12.5px; color: var(--muted); line-height: 1.5; }
 .muted-xs { font-size: 12px; color: var(--muted); }
 
-/* Hero Frame (Main City Card — Manrope headlines + ibr depth) */
+/* Главная карточка города */
 .hero-card {
   position: relative; overflow: hidden; min-height: 320px; padding: 24px;
   display: flex; flex-direction: column; justify-content: space-between;
@@ -825,7 +847,7 @@ body.light-theme .hero-card {
 .hero-credit { font-size: 11px; color: rgba(243, 226, 232, 0.8); text-decoration: underline; text-decoration-color: rgba(255, 255, 255, 0.3); text-underline-offset: 2px; }
 .hero-credit:hover { color: #fff; }
 
-/* Grids */
+/* Сетки карточек */
 .grid-4 { display: grid; grid-template-columns: 1fr; gap: 14px; }
 @media (min-width: 768px) { .grid-4 { grid-template-columns: repeat(2, 1fr); } }
 @media (min-width: 1280px) { .grid-4 { grid-template-columns: repeat(4, 1fr); } }
@@ -845,7 +867,7 @@ body.light-theme .hero-card {
 .aqi-subs { display: grid; grid-template-columns: repeat(2, minmax(75px, 1fr)); gap: 14px; font-size: 12px; }
 @media (min-width: 640px) { .aqi-subs { grid-template-columns: repeat(4, minmax(75px, 1fr)); } }
 
-/* Hourly & Daily */
+/* Почасовой и дневной прогноз */
 .hourly-strip { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 8px; margin-top: 16px; }
 .hourly-strip::-webkit-scrollbar, .table-scroll::-webkit-scrollbar { height: 6px; width: 6px; }
 .hourly-strip::-webkit-scrollbar-thumb, .table-scroll::-webkit-scrollbar-thumb { background: var(--line-strong); border-radius: 999px; }
@@ -877,12 +899,12 @@ body.light-theme .daily-bar-fill {
   box-shadow: 0 2px 8px rgba(225, 29, 72, 0.18);
 }
 
-/* Sparkline */
+/* График температуры */
 .sparkline-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 12px; }
 .sparkline-title { color: var(--muted); font-weight: 500; }
 .sparkline-svg { width: 100%; display: block; overflow: visible; }
 
-/* Map Preview Card & Custom Mercator Tile Map */
+/* Превью карты и интерактивная карта */
 .map-preview-box {
   position: relative; height: 192px; border-radius: 12px; overflow: hidden; padding: 16px;
   display: flex; flex-direction: column; justify-content: space-between; color: #fff;
@@ -941,7 +963,7 @@ body.light-theme .vmap-tiles { filter: saturate(84%) brightness(99%) contrast(95
 .legend-dot { width: 9px; height: 9px; border-radius: 50%; }
 .disclaimer-bar { padding: 12px 14px; font-size: 12px; color: var(--muted); }
 
-/* Forecast Chips, Desktop Table & Mobile Expandable Cards */
+/* Таблица и карточки прогноза на 16 дней */
 .pill-group { display: flex; flex-wrap: wrap; gap: 8px; }
 .chip-btn {
   font-family: var(--font-ibr);
@@ -990,9 +1012,13 @@ body.light-theme .chip-btn.active {
 
 .status-banners { display: flex; flex-direction: column; gap: 10px; }
 .banner-box { padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 13px; border-color: rgba(251, 113, 133, 0.45); }
-.ios-modal { position: fixed; inset: 0; z-index: 100; background: rgba(0, 0, 0, 0.65); display: flex; align-items: center; justify-content: center; padding: 16px; }
+.ios-modal { position: fixed; inset: 0; z-index: 100; background: rgba(0, 0, 0, 0.65); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); display: flex; align-items: center; justify-content: center; padding: 16px; }
 .ios-modal[hidden] { display: none; }
 .ios-card { max-width: 360px; width: 100%; padding: 22px; display: flex; flex-direction: column; gap: 14px; }
+.city-prompt-card { max-width: 440px; width: 100%; padding: 24px; display: flex; flex-direction: column; gap: 16px; }
+.city-prompt-card .search-wrap { flex: none; max-width: none; width: 100%; }
+.city-prompt-results { max-height: 220px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
+.city-prompt-chips { display: flex; flex-wrap: wrap; gap: 8px; }
 
 .scroll-top-btn {
   position: fixed;
@@ -1028,7 +1054,7 @@ body.light-theme .scroll-top-btn {
 body.light-theme .scroll-top-btn:hover { background: #ffffff; }
 .scroll-top-btn[hidden] { display: none; }
 
-/* Architectural Space Grotesk Footer */
+/* Подвал сайта */
 .app-footer {
   font-family: var(--font-ibr);
   padding: 14px 20px;

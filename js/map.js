@@ -3,6 +3,7 @@ import {convertTemp, el, formatTemp} from './helpers.js';
 
 const TILE_SIZE = 256;
 
+// Перевод координат карты в пиксели Меркатора
 function lonToWorldX(lon, zoom) {
   return ((lon + 180) / 360) * TILE_SIZE * Math.pow(2, zoom);
 }
@@ -22,6 +23,7 @@ function worldYToLat(wy, zoom) {
   return (180 / Math.PI) * Math.atan(0.5 * (Math.exp(n) - Math.exp(-n)));
 }
 
+// Цвет метки на карте по значению выбранного слоя
 function getLayerColor(layer, pt) {
   if (layer === 'temp') {
     if (pt.temperature <= -10) return '#38bdf8';
@@ -48,6 +50,7 @@ function getLayerColor(layer, pt) {
   return '#e2e8f0';
 }
 
+// Подпись значения на маркере сетки
 function formatGridValue(layer, pt, unit, t) {
   if (layer === 'temp') return formatTemp(pt.temperature, unit);
   if (layer === 'precip') return `${pt.precipitation.toFixed(1)} ${t.map.units.precip}`;
@@ -55,6 +58,41 @@ function formatGridValue(layer, pt, unit, t) {
   return `${Math.round(pt.cloudCover)}${t.map.units.clouds}`;
 }
 
+// Пункты легенды для каждого слоя
+function getLegendItems(layer, unit, t) {
+  if (layer === 'temp') {
+    return [
+      {c: '#38bdf8', l: `${convertTemp(-10, unit)}°`},
+      {c: '#60a5fa', l: `${convertTemp(0, unit)}°`},
+      {c: '#a78bfa', l: `${convertTemp(10, unit)}°`},
+      {c: '#fda4af', l: `${convertTemp(20, unit)}°`},
+      {c: '#e11d48', l: `${convertTemp(30, unit)}°+`},
+    ];
+  }
+  if (layer === 'precip') {
+    return [
+      {c: '#64748b', l: '0'},
+      {c: '#7dd3fc', l: '0.5'},
+      {c: '#38bdf8', l: '2.5'},
+      {c: '#818cf8', l: `4.0+ ${t.map.units.precip}`},
+    ];
+  }
+  if (layer === 'wind') {
+    return [
+      {c: '#7dd3fc', l: '<12'},
+      {c: '#60a5fa', l: '20'},
+      {c: '#fbbf24', l: '35'},
+      {c: '#fb7185', l: `40+ ${t.map.units.wind}`},
+    ];
+  }
+  return [
+    {c: '#7dd3fc', l: '0–25%'},
+    {c: '#94a3b8', l: '25–60%'},
+    {c: '#e2e8f0', l: '60–100%'},
+  ];
+}
+
+// Интерактивная карта погоды на базе OpenStreetMap
 export function createWeatherMapView({city, cityName, unit, t}) {
   let activeLayer = 'temp';
   let zoom = 6;
@@ -64,11 +102,10 @@ export function createWeatherMapView({city, cityName, unit, t}) {
   let selectedPoint = null;
   let abortCtrl = null;
   let moveTimer = null;
-  let isLoading = false;
 
   const root = el('div', {className: 'view-stack'});
 
-  // Header panel
+  // Верхняя панель управления слоями
   const refreshLabel = el('span', {}, t.map.refreshBtn);
   const refreshBtn = el(
     'button',
@@ -83,6 +120,7 @@ export function createWeatherMapView({city, cityName, unit, t}) {
   const legendContainer = el('div', {className: 'map-legend-items mono'});
   const layersRow = el('div', {className: 'pill-group'});
   const layerButtons = {};
+
   for (const layer of ['temp', 'precip', 'wind', 'clouds']) {
     const btn = el(
       'button',
@@ -91,7 +129,9 @@ export function createWeatherMapView({city, cityName, unit, t}) {
         className: `chip-btn ${layer === activeLayer ? 'active' : ''}`,
         onClick: () => {
           activeLayer = layer;
-          Object.entries(layerButtons).forEach(([k, b]) => b.classList.toggle('active', k === layer));
+          for (const [k, b] of Object.entries(layerButtons)) {
+            b.classList.toggle('active', k === layer);
+          }
           renderLegend();
           renderMarkers();
         },
@@ -125,7 +165,7 @@ export function createWeatherMapView({city, cityName, unit, t}) {
     )
   );
 
-  // Viewport DOM
+  // Слои карты и кнопки масштаба
   const tileLayer = el('div', {className: 'vmap-tiles'});
   const overlayLayer = el('div', {className: 'vmap-overlays'});
   const popupBox = el('div', {className: 'vmap-popup glass-panel-elevated', hidden: true});
@@ -135,7 +175,7 @@ export function createWeatherMapView({city, cityName, unit, t}) {
     {
       type: 'button',
       className: 'vmap-zoom-btn',
-      'aria-label': 'Zoom in',
+      'aria-label': 'Увеличить',
       onClick: () => setZoom(zoom + 1),
     },
     '+'
@@ -145,7 +185,7 @@ export function createWeatherMapView({city, cityName, unit, t}) {
     {
       type: 'button',
       className: 'vmap-zoom-btn',
-      'aria-label': 'Zoom out',
+      'aria-label': 'Уменьшить',
       onClick: () => setZoom(zoom - 1),
     },
     '−'
@@ -168,35 +208,7 @@ export function createWeatherMapView({city, cityName, unit, t}) {
 
   function renderLegend() {
     legendContainer.replaceChildren();
-    const items =
-      activeLayer === 'temp'
-        ? [
-            {c: '#38bdf8', l: `${convertTemp(-10, unit)}°`},
-            {c: '#60a5fa', l: `${convertTemp(0, unit)}°`},
-            {c: '#a78bfa', l: `${convertTemp(10, unit)}°`},
-            {c: '#fda4af', l: `${convertTemp(20, unit)}°`},
-            {c: '#e11d48', l: `${convertTemp(30, unit)}°+`},
-          ]
-        : activeLayer === 'precip'
-          ? [
-              {c: '#64748b', l: `0`},
-              {c: '#7dd3fc', l: `0.5`},
-              {c: '#38bdf8', l: `2.5`},
-              {c: '#818cf8', l: `4.0+ ${t.map.units.precip}`},
-            ]
-          : activeLayer === 'wind'
-            ? [
-                {c: '#7dd3fc', l: `<12`},
-                {c: '#60a5fa', l: `20`},
-                {c: '#fbbf24', l: `35`},
-                {c: '#fb7185', l: `40+ ${t.map.units.wind}`},
-              ]
-            : [
-                {c: '#7dd3fc', l: '0–25%'},
-                {c: '#94a3b8', l: '25–60%'},
-                {c: '#e2e8f0', l: '60–100%'},
-              ];
-
+    const items = getLegendItems(activeLayer, unit, t);
     for (const item of items) {
       legendContainer.appendChild(
         el('span', {className: 'legend-item'}, el('span', {className: 'legend-dot', style: {background: item.c}}), item.l)
@@ -217,6 +229,7 @@ export function createWeatherMapView({city, cityName, unit, t}) {
     };
   }
 
+  // Отрисовка тайлов карты
   function renderTiles() {
     const w = viewport.clientWidth || 720;
     const h = viewport.clientHeight || 480;
@@ -247,6 +260,7 @@ export function createWeatherMapView({city, cityName, unit, t}) {
     tileLayer.replaceChildren(frag);
   }
 
+  // Отрисовка пина города и значений погоды
   function renderMarkers() {
     const w = viewport.clientWidth || 720;
     const h = viewport.clientHeight || 480;
@@ -254,7 +268,7 @@ export function createWeatherMapView({city, cityName, unit, t}) {
     const cy = latToWorldY(centerLat, zoom);
     const frag = document.createDocumentFragment();
 
-    // Active city pin
+    // Пин активного города
     const cityPx = w / 2 + (lonToWorldX(city.longitude, zoom) - cx);
     const cityPy = h / 2 + (latToWorldY(city.latitude, zoom) - cy);
     const pin = el(
@@ -345,10 +359,10 @@ export function createWeatherMapView({city, cityName, unit, t}) {
     moveTimer = setTimeout(() => void loadGrid(), 380);
   }
 
+  // Загружаем точки погоды для видимой области карты
   async function loadGrid() {
     abortCtrl?.abort();
     abortCtrl = new AbortController();
-    isLoading = true;
     refreshLabel.textContent = t.map.refreshing;
     refreshBtn.disabled = true;
     try {
@@ -358,25 +372,24 @@ export function createWeatherMapView({city, cityName, unit, t}) {
       }
     } catch (err) {
       if (err.name !== 'AbortError') {
-        // Ignore transient network errors
+        // Ошибку сети при движении карты пропускаем
       }
     } finally {
       if (!abortCtrl.signal.aborted) {
-        isLoading = false;
         refreshLabel.textContent = t.map.refreshBtn;
         refreshBtn.disabled = false;
       }
     }
   }
 
-  // Panning via Pointer Events (works smoothly for mouse and mobile touch)
+  // Перетаскивание карты мышкой и пальцем
   let dragging = false;
   let dragStartX = 0;
   let dragStartY = 0;
   let startCenterX = 0;
   let startCenterY = 0;
 
-  const onPointerDown = (e) => {
+  function onPointerDown(e) {
     if (e.target.closest('button')) return;
     dragging = true;
     dragStartX = e.clientX;
@@ -384,9 +397,9 @@ export function createWeatherMapView({city, cityName, unit, t}) {
     startCenterX = lonToWorldX(centerLon, zoom);
     startCenterY = latToWorldY(centerLat, zoom);
     viewport.setPointerCapture?.(e.pointerId);
-  };
+  }
 
-  const onPointerMove = (e) => {
+  function onPointerMove(e) {
     if (!dragging) return;
     const dx = e.clientX - dragStartX;
     const dy = e.clientY - dragStartY;
@@ -396,18 +409,18 @@ export function createWeatherMapView({city, cityName, unit, t}) {
     if (centerLon < -180) centerLon += 360;
     renderTiles();
     renderMarkers();
-  };
+  }
 
-  const onPointerUp = () => {
+  function onPointerUp() {
     if (!dragging) return;
     dragging = false;
     scheduleGridLoad();
-  };
+  }
 
-  const onWheel = (e) => {
+  function onWheel(e) {
     e.preventDefault();
     setZoom(e.deltaY < 0 ? zoom + 1 : zoom - 1);
-  };
+  }
 
   viewport.addEventListener('pointerdown', onPointerDown);
   viewport.addEventListener('pointermove', onPointerMove);

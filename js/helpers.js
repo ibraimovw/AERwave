@@ -1,46 +1,52 @@
+// Создание DOM-элемента с атрибутами и детьми
+function appendChildren(parent, items) {
+  for (let i = 0; i < items.length; i++) {
+    const child = items[i];
+    if (child === null || child === undefined || child === false) continue;
+    if (Array.isArray(child)) {
+      appendChildren(parent, child);
+    } else if (typeof child === 'string' || typeof child === 'number') {
+      parent.appendChild(document.createTextNode(String(child)));
+    } else if (child instanceof Node) {
+      parent.appendChild(child);
+    }
+  }
+}
+
 export function el(tag, props = {}, ...children) {
   const node = document.createElement(tag);
-  for (const [k, v] of Object.entries(props)) {
-    if (v === null || v === undefined || v === false) continue;
-    if (k === 'className') {
-      node.className = v;
-    } else if (k === 'style' && typeof v === 'object') {
-      Object.assign(node.style, v);
-    } else if (k === 'dataset' && typeof v === 'object') {
-      Object.assign(node.dataset, v);
-    } else if (k.startsWith('on') && typeof v === 'function') {
-      node.addEventListener(k.slice(2).toLowerCase(), v);
-    } else if (v === true) {
-      node.setAttribute(k, '');
+
+  for (const [key, value] of Object.entries(props)) {
+    if (value === null || value === undefined || value === false) continue;
+
+    if (key === 'className') {
+      node.className = value;
+    } else if (key === 'style' && typeof value === 'object') {
+      Object.assign(node.style, value);
+    } else if (key === 'dataset' && typeof value === 'object') {
+      Object.assign(node.dataset, value);
+    } else if (key.startsWith('on') && typeof value === 'function') {
+      node.addEventListener(key.slice(2).toLowerCase(), value);
+    } else if (value === true) {
+      node.setAttribute(key, '');
     } else {
-      node.setAttribute(k, String(v));
+      node.setAttribute(key, String(value));
     }
   }
-  for (const child of children.flat()) {
-    if (child === null || child === undefined || child === false) continue;
-    if (typeof child === 'string' || typeof child === 'number') {
-      node.appendChild(document.createTextNode(String(child)));
-    } else {
-      node.appendChild(child);
-    }
-  }
+
+  appendChildren(node, children);
   return node;
 }
 
+// Обновление содержимого контейнера
 export function setChildren(parent, ...children) {
   if (!parent) return;
-  const nodes = [];
-  for (const child of children.flat(Infinity)) {
-    if (child === null || child === undefined || child === false) continue;
-    if (typeof child === 'string' || typeof child === 'number') {
-      nodes.push(document.createTextNode(String(child)));
-    } else if (child instanceof Node) {
-      nodes.push(child);
-    }
-  }
-  parent.replaceChildren(...nodes);
+  const fragment = document.createDocumentFragment();
+  appendChildren(fragment, children);
+  parent.replaceChildren(fragment);
 }
 
+// Подсветка карточки за курсором мыши
 export function attachSpotlight(node) {
   node.classList.add('glass-spotlight');
   node.addEventListener('pointermove', (e) => {
@@ -56,6 +62,7 @@ export function attachSpotlight(node) {
   return node;
 }
 
+// Лёгкий магнитный эффект для кнопок на ПК
 export function initMagneticButtons() {
   if (typeof window === 'undefined') return;
   const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
@@ -65,12 +72,12 @@ export function initMagneticButtons() {
     '.btn-primary, .btn-subtle, .btn-icon, .btn-theme-circle, .seg-btn, .preset-btn, .chip-btn, .sidebar-toggle-btn, .nav-btn';
   let activeEl = null;
 
-  const resetActive = () => {
+  function resetActive() {
     if (!activeEl) return;
     activeEl.style.setProperty('--mag-x', '0px');
     activeEl.style.setProperty('--mag-y', '0px');
     activeEl = null;
-  };
+  }
 
   document.addEventListener(
     'pointermove',
@@ -81,16 +88,20 @@ export function initMagneticButtons() {
         resetActive();
         return;
       }
+
       if (activeEl && activeEl !== target) {
         activeEl.style.setProperty('--mag-x', '0px');
         activeEl.style.setProperty('--mag-y', '0px');
       }
       activeEl = target;
+
       const rect = target.getBoundingClientRect();
       if (!rect.width || !rect.height) return;
+
       const nx = ((e.clientX - rect.left) / rect.width - 0.5) * 2;
       const ny = ((e.clientY - rect.top) / rect.height - 0.5) * 2;
       const pull = target.classList.contains('btn-primary') ? 5.5 : 3.5;
+
       target.style.setProperty('--mag-x', `${(nx * pull).toFixed(2)}px`);
       target.style.setProperty('--mag-y', `${(ny * pull).toFixed(2)}px`);
     },
@@ -101,18 +112,26 @@ export function initMagneticButtons() {
   window.addEventListener('blur', resetActive);
 }
 
+// Перевод и форматирование температуры
 export function convertTemp(tempC, unit) {
-  return unit === 'F' ? Math.round((tempC * 9) / 5 + 32) : Math.round(tempC);
+  if (unit === 'F') {
+    return Math.round((tempC * 9) / 5 + 32);
+  }
+  return Math.round(tempC);
 }
 
 export function convertTempExact(tempC, unit) {
-  return unit === 'F' ? (tempC * 9) / 5 + 32 : tempC;
+  if (unit === 'F') {
+    return (tempC * 9) / 5 + 32;
+  }
+  return tempC;
 }
 
 export function formatTemp(tempC, unit) {
   return `${convertTemp(tempC, unit)}°`;
 }
 
+// Определяем тип погоды для фона
 export function getWeatherMood(code) {
   if (code === 0 || code === 1) return 'clear';
   if (code === 2 || code === 3) return 'cloudy';
@@ -122,6 +141,7 @@ export function getWeatherMood(code) {
   return 'rain';
 }
 
+// Местное время в выбранном городе
 export function getCityLocalClock(timezone, nowMs = Date.now()) {
   try {
     const d = new Date(nowMs);
@@ -134,39 +154,45 @@ export function getCityLocalClock(timezone, nowMs = Date.now()) {
       minute: '2-digit',
       hour12: false,
     }).formatToParts(d);
-    const get = (type) => parts.find((p) => p.type === type)?.value ?? '00';
-    const hour = Number(get('hour')) % 24;
-    const minute = Number(get('minute'));
+
+    const getPart = (type) => parts.find((p) => p.type === type)?.value ?? '00';
+    const hour = Number(getPart('hour')) % 24;
+    const minute = Number(getPart('minute'));
+
     return {
-      dateStr: `${get('year')}-${get('month')}-${get('day')}`,
+      dateStr: `${getPart('year')}-${getPart('month')}-${getPart('day')}`,
       minutesOfDay: hour * 60 + minute,
       formattedTime: `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`,
     };
   } catch {
     const d = new Date(nowMs);
+    const hour = d.getUTCHours();
+    const minute = d.getUTCMinutes();
     return {
       dateStr: d.toISOString().slice(0, 10),
-      minutesOfDay: d.getUTCHours() * 60 + d.getUTCMinutes(),
-      formattedTime: `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`,
+      minutesOfDay: hour * 60 + minute,
+      formattedTime: `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`,
     };
   }
 }
 
 export function parseIsoMinutes(isoStr) {
-  const m = /T(\d{2}):(\d{2})/.exec(isoStr || '');
-  if (!m) return 0;
-  return Number(m[1]) * 60 + Number(m[2]);
+  const match = /T(\d{2}):(\d{2})/.exec(isoStr || '');
+  if (!match) return 0;
+  return Number(match[1]) * 60 + Number(match[2]);
 }
 
 export function formatIsoTime(isoStr) {
-  const m = /T(\d{2}:\d{2})/.exec(isoStr || '');
-  return m ? m[1] : '--:--';
+  const match = /T(\d{2}:\d{2})/.exec(isoStr || '');
+  return match ? match[1] : '--:--';
 }
 
+// Фаза суток (рассвет, день, закат, ночь)
 export function computeDayPhase(timezone, sunriseIso, sunsetIso, nowMs = Date.now()) {
   const {minutesOfDay} = getCityLocalClock(timezone, nowMs);
   const sunrise = sunriseIso ? parseIsoMinutes(sunriseIso) : 6 * 60 + 30;
   const sunset = sunsetIso ? parseIsoMinutes(sunsetIso) : 18 * 60 + 30;
+
   if (minutesOfDay >= sunrise - 45 && minutesOfDay < sunrise + 75) return 'dawn';
   if (minutesOfDay >= sunrise + 75 && minutesOfDay < sunset - 75) return 'day';
   if (minutesOfDay >= sunset - 75 && minutesOfDay < sunset + 45) return 'dusk';
@@ -175,9 +201,12 @@ export function computeDayPhase(timezone, sunriseIso, sunsetIso, nowMs = Date.no
 
 function fmtMins(mins) {
   const wrapped = ((Math.round(mins) % 1440) + 1440) % 1440;
-  return `${String(Math.floor(wrapped / 60)).padStart(2, '0')}:${String(wrapped % 60).padStart(2, '0')}`;
+  const hours = String(Math.floor(wrapped / 60)).padStart(2, '0');
+  const minutes = String(wrapped % 60).padStart(2, '0');
+  return `${hours}:${minutes}`;
 }
 
+// Положение солнца и длина светового дня
 export function computeSunProgress(timezone, sunriseIso, sunsetIso, nowMs = Date.now()) {
   const {minutesOfDay} = getCityLocalClock(timezone, nowMs);
   const sunrise = parseIsoMinutes(sunriseIso);
@@ -194,6 +223,7 @@ export function computeSunProgress(timezone, sunriseIso, sunsetIso, nowMs = Date
   if (minutesOfDay > sunset) {
     return {progress: 1, state: 'after', daylightHours, daylightMinutes, goldenMorning, goldenEvening};
   }
+
   return {
     progress: Math.min(1, Math.max(0, (minutesOfDay - sunrise) / span)),
     state: 'during',
@@ -204,31 +234,35 @@ export function computeSunProgress(timezone, sunriseIso, sunsetIso, nowMs = Date
   };
 }
 
+// Фаза луны и процент освещённости
 export function computeMoonPhase(nowMs = Date.now(), lang = 'ru') {
   const synodicDays = 29.53058867;
   const knownNewMoonMs = Date.UTC(2000, 0, 6, 18, 14, 0);
   const daysSince = (nowMs - knownNewMoonMs) / 86400000;
   const phase = (((daysSince / synodicDays) % 1) + 1) % 1;
   const illumination = Math.round(((1 - Math.cos(phase * Math.PI * 2)) / 2) * 100);
+  const isRu = lang === 'ru';
 
-  let name = '';
-  if (phase < 0.04 || phase >= 0.96) name = lang === 'ru' ? 'Новолуние' : 'New Moon';
-  else if (phase < 0.21) name = lang === 'ru' ? 'Растущий серп' : 'Waxing Crescent';
-  else if (phase < 0.29) name = lang === 'ru' ? 'Первая четверть' : 'First Quarter';
-  else if (phase < 0.46) name = lang === 'ru' ? 'Растущая луна' : 'Waxing Gibbous';
-  else if (phase < 0.54) name = lang === 'ru' ? 'Полнолуние' : 'Full Moon';
-  else if (phase < 0.71) name = lang === 'ru' ? 'Убывающая луна' : 'Waning Gibbous';
-  else if (phase < 0.79) name = lang === 'ru' ? 'Последняя четверть' : 'Last Quarter';
-  else name = lang === 'ru' ? 'Старая луна' : 'Waning Crescent';
+  let name = isRu ? 'Старая луна' : 'Waning Crescent';
+  if (phase < 0.04 || phase >= 0.96) name = isRu ? 'Новолуние' : 'New Moon';
+  else if (phase < 0.21) name = isRu ? 'Растущий серп' : 'Waxing Crescent';
+  else if (phase < 0.29) name = isRu ? 'Первая четверть' : 'First Quarter';
+  else if (phase < 0.46) name = isRu ? 'Растущая луна' : 'Waxing Gibbous';
+  else if (phase < 0.54) name = isRu ? 'Полнолуние' : 'Full Moon';
+  else if (phase < 0.71) name = isRu ? 'Убывающая луна' : 'Waning Gibbous';
+  else if (phase < 0.79) name = isRu ? 'Последняя четверть' : 'Last Quarter';
 
   return {name, illumination};
 }
 
+// Тренд давления за последние часы
 export function computePressureTrend(weather) {
   const {dateStr, minutesOfDay} = getCityLocalClock(weather.timezone);
-  const currentIsoHour = `${dateStr}T${String(Math.floor(minutesOfDay / 60)).padStart(2, '0')}:00`;
+  const hourStr = String(Math.floor(minutesOfDay / 60)).padStart(2, '0');
+  const currentIsoHour = `${dateStr}T${hourStr}:00`;
   const idx = weather.hourly.findIndex((h) => h.time >= currentIsoHour);
   if (idx <= 2) return 'steady';
+
   const prev = weather.hourly[Math.max(0, idx - 3)]?.pressure ?? weather.current.pressure;
   const diff = weather.current.pressure - prev;
   if (diff >= 1.5) return 'rising';
@@ -236,18 +270,22 @@ export function computePressureTrend(weather) {
   return 'steady';
 }
 
+// Берём ближайшие 24 часа прогноза
 export function getNext24Hours(weather) {
   const {dateStr, minutesOfDay} = getCityLocalClock(weather.timezone);
-  const currentIsoHour = `${dateStr}T${String(Math.floor(minutesOfDay / 60)).padStart(2, '0')}:00`;
+  const hourStr = String(Math.floor(minutesOfDay / 60)).padStart(2, '0');
+  const currentIsoHour = `${dateStr}T${hourStr}:00`;
   const idx = weather.hourly.findIndex((h) => h.time >= currentIsoHour);
   const start = idx >= 0 ? idx : 0;
   return weather.hourly.slice(start, start + 24);
 }
 
+// Форматирование даты для карточек и таблицы
 export function formatDateLabel(dateStr, lang, style = 'short') {
   const [y, m, d] = dateStr.split('-').map(Number);
   const utcDate = new Date(Date.UTC(y, (m ?? 1) - 1, d ?? 1, 12, 0, 0));
   const locale = lang === 'ru' ? 'ru-RU' : 'en-US';
+
   if (style === 'weekday') {
     return new Intl.DateTimeFormat(locale, {weekday: 'short', timeZone: 'UTC'}).format(utcDate);
   }
@@ -275,165 +313,188 @@ export function getUvCategory(uv, uvLevels) {
   return uvLevels.extreme;
 }
 
-export function generateHeroDailySummary(weather, unit, lang) {
-  const today = weather.daily[0];
+// Находим максимальный порыв ветра за 24 часа
+function findMaxWind(initialWind, hoursList, useGusts) {
+  let maxVal = initialWind;
+  for (const h of hoursList) {
+    const value = useGusts ? h.windGusts || h.windSpeed : h.windSpeed;
+    if (value > maxVal) maxVal = value;
+  }
+  return maxVal;
+}
+
+// Короткая сводка погоды на главной карточке
+export function generateHeroDailySummary(weather, _unit, lang) {
   const next24 = getNext24Hours(weather);
   const wetHour = next24.find((h) => h.precipProb >= 55 || h.precipitation >= 0.4);
-  const maxWind24 = Math.max(weather.current.windGusts, ...next24.map((h) => h.windGusts || h.windSpeed));
-  const tMin = today ? formatTemp(today.tempMin, unit) : formatTemp(weather.current.temperature, unit);
-  const tMax = today ? formatTemp(today.tempMax, unit) : formatTemp(weather.current.temperature, unit);
+  const maxWind24 = findMaxWind(weather.current.windGusts, next24, true);
 
   if (lang === 'ru') {
     const precipText = wetHour
-      ? `осадки вероятны около ${formatIsoTime(wetHour.time)}`
-      : 'в ближайшие 24 ч без существенных осадков';
+      ? `Осадки вероятны около ${formatIsoTime(wetHour.time)}`
+      : 'В ближайшие 24 ч без существенных осадков';
     const windText =
       maxWind24 >= 35 ? `, порывы ветра до ${Math.round(maxWind24)} км/ч` : ', ветер умеренный';
-    return `Сегодня от ${tMin} до ${tMax}, ${precipText}${windText}.`;
+    return `${precipText}${windText}.`;
   }
+
   const precipText = wetHour
-    ? `precipitation likely around ${formatIsoTime(wetHour.time)}`
-    : 'mostly dry over the next 24 hours';
+    ? `Precipitation likely around ${formatIsoTime(wetHour.time)}`
+    : 'Mostly dry over the next 24 hours';
   const windText =
     maxWind24 >= 35 ? `, wind gusts up to ${Math.round(maxWind24)} km/h` : ', gentle breeze';
-  return `Today ranges from ${tMin} to ${tMax}, with ${precipText}${windText}.`;
+  return `${precipText}${windText}.`;
 }
 
+// Предупреждения о сложных погодных условиях
 export function generateWeatherAlerts(weather, lang) {
   const alerts = [];
   const next24 = getNext24Hours(weather);
-  const maxGust = Math.max(weather.current.windGusts, ...next24.map((h) => h.windGusts || 0));
-  const minTemp24 = Math.min(weather.current.temperature, ...next24.map((h) => h.temperature));
-  const hasStorm = [95, 96, 99, 65, 82].includes(weather.current.weatherCode);
+  const isRu = lang === 'ru';
 
-  if (hasStorm) {
+  let maxGust = weather.current.windGusts;
+  let minTemp24 = weather.current.temperature;
+  let hasPrecip = false;
+
+  for (const h of next24) {
+    if ((h.windGusts || 0) > maxGust) maxGust = h.windGusts || 0;
+    if (h.temperature < minTemp24) minTemp24 = h.temperature;
+    if (h.precipitation > 0.1) hasPrecip = true;
+  }
+
+  const stormCodes = [95, 96, 99, 65, 82];
+  if (stormCodes.includes(weather.current.weatherCode)) {
     alerts.push({
-      title: lang === 'ru' ? 'Шторм / интенсивные осадки' : 'Storm & Heavy Rain Warning',
-      description:
-        lang === 'ru'
-          ? 'Возможны сильные ливни или гроза. Избегайте открытых пространств и низин.'
-          : 'Heavy rain or thunderstorm activity expected. Seek shelter if outdoors.',
+      title: isRu ? 'Шторм / интенсивные осадки' : 'Storm & Heavy Rain Warning',
+      description: isRu
+        ? 'Возможны сильные ливни или гроза. Избегайте открытых пространств и низин.'
+        : 'Heavy rain or thunderstorm activity expected. Seek shelter if outdoors.',
     });
   }
+
   if (maxGust >= 48) {
     alerts.push({
-      title: lang === 'ru' ? `Сильные порывы до ${Math.round(maxGust)} км/ч` : `Strong Gusts (${Math.round(maxGust)} km/h)`,
-      description:
-        lang === 'ru'
-          ? 'Ожидается усиление ветра в ближайшие 24 часа.'
-          : 'Strong wind gusts expected over the next 24 hours.',
+      title: isRu
+        ? `Сильные порывы до ${Math.round(maxGust)} км/ч`
+        : `Strong Gusts (${Math.round(maxGust)} km/h)`,
+      description: isRu
+        ? 'Ожидается усиление ветра в ближайшие 24 часа.'
+        : 'Strong wind gusts expected over the next 24 hours.',
     });
   }
-  if (minTemp24 <= 1 && next24.some((h) => h.precipitation > 0.1)) {
+
+  if (minTemp24 <= 1 && hasPrecip) {
     alerts.push({
-      title: lang === 'ru' ? 'Риск гололедицы' : 'Black Ice Risk',
-      description:
-        lang === 'ru'
-          ? 'Температура около или ниже 0° при осадках — на дорогах возможен лёд.'
-          : 'Sub-freezing temperatures combined with moisture may create slick surfaces.',
+      title: isRu ? 'Риск гололедицы' : 'Black Ice Risk',
+      description: isRu
+        ? 'Температура около или ниже 0° при осадках — на дорогах возможен лёд.'
+        : 'Sub-freezing temperatures combined with moisture may create slick surfaces.',
     });
   }
+
   if ((weather.airQuality?.europeanAqi ?? 0) >= 60) {
+    const aqiVal = weather.airQuality.europeanAqi;
+    const pm25 = weather.airQuality.pm25;
     alerts.push({
-      title: lang === 'ru' ? `Пониженное качество воздуха (AQI ${weather.airQuality.europeanAqi})` : `Elevated Air Pollution (AQI ${weather.airQuality.europeanAqi})`,
-      description:
-        lang === 'ru'
-          ? `Повышенная концентрация частиц PM2.5 (${weather.airQuality.pm25} мкг/м³).`
-          : `Elevated PM2.5 concentration (${weather.airQuality.pm25} µg/m³).`,
+      title: isRu ? `Пониженное качество воздуха (AQI ${aqiVal})` : `Elevated Air Pollution (AQI ${aqiVal})`,
+      description: isRu
+        ? `Повышенная концентрация частиц PM2.5 (${pm25} мкг/м³).`
+        : `Elevated PM2.5 concentration (${pm25} µg/m³).`,
     });
   }
+
   return alerts;
 }
 
+// Простые советы по одежде, ветру и осадкам
 export function generateWeatherInsights(weather, unit, lang) {
   const insights = [];
   const next24 = getNext24Hours(weather);
   const {current} = weather;
+  const isRu = lang === 'ru';
 
   if (current.temperature <= 0) {
     insights.push({
       severity: 'notice',
-      title: lang === 'ru' ? 'Гардероб: зимняя защита' : 'Wardrobe: Sub-zero Layering',
-      description:
-        lang === 'ru'
-          ? 'Тёплый пуховик, шарф и перчатки обязательны при температуре ниже нуля.'
-          : 'Insulated winter coat, gloves, and warm layers recommended.',
+      title: isRu ? 'Гардероб: зимняя защита' : 'Wardrobe: Sub-zero Layering',
+      description: isRu
+        ? 'Тёплый пуховик, шарф и перчатки обязательны при температуре ниже нуля.'
+        : 'Insulated winter coat, gloves, and warm layers recommended.',
     });
   } else if (current.temperature <= 12) {
     insights.push({
       severity: 'info',
-      title: lang === 'ru' ? 'Гардероб: многослойность' : 'Wardrobe: Layered Outerwear',
-      description:
-        lang === 'ru'
-          ? 'Подойдут ветровка, пальто или плотный трикотаж.'
-          : 'A windproof jacket or layered sweater fits current temperatures.',
+      title: isRu ? 'Гардероб: многослойность' : 'Wardrobe: Layered Outerwear',
+      description: isRu
+        ? 'Подойдут ветровка, пальто или плотный трикотаж.'
+        : 'A windproof jacket or layered sweater fits current temperatures.',
     });
   } else {
     insights.push({
       severity: 'info',
-      title: lang === 'ru' ? 'Гардероб: комфортно' : 'Wardrobe: Light & Breathable',
-      description:
-        lang === 'ru'
-          ? 'Достаточно лёгкой одежды без тяжёлого утепления.'
-          : 'Breathable casual wear is comfortable right now.',
+      title: isRu ? 'Гардероб: комфортно' : 'Wardrobe: Light & Breathable',
+      description: isRu
+        ? 'Достаточно лёгкой одежды без тяжёлого утепления.'
+        : 'Breathable casual wear is comfortable right now.',
     });
   }
 
   const rainPeak = next24.find((h) => h.precipProb >= 45 || h.precipitation >= 0.3);
   if (rainPeak) {
+    const prob = Math.round(rainPeak.precipProb);
     insights.push({
-      severity: rainPeak.precipProb >= 70 ? 'alert' : 'notice',
-      title: lang === 'ru' ? `Осадки около ${formatIsoTime(rainPeak.time)}` : `Rain Window ~${formatIsoTime(rainPeak.time)}`,
-      description:
-        lang === 'ru'
-          ? `Вероятность ${Math.round(rainPeak.precipProb)}% — возьмите зонт или непромокаемую куртку.`
-          : `${Math.round(rainPeak.precipProb)}% precipitation chance — bring an umbrella.`,
+      severity: prob >= 70 ? 'alert' : 'notice',
+      title: isRu ? `Осадки около ${formatIsoTime(rainPeak.time)}` : `Rain Window ~${formatIsoTime(rainPeak.time)}`,
+      description: isRu
+        ? `Вероятность ${prob}% — возьмите зонт или непромокаемую куртку.`
+        : `${prob}% precipitation chance — bring an umbrella.`,
     });
   } else {
     insights.push({
       severity: 'info',
-      title: lang === 'ru' ? 'Сухое окно 24 ч' : 'Dry 24-Hour Window',
-      description:
-        lang === 'ru'
-          ? 'Существенных осадков не ожидается — комфортно для прогулок и поездок.'
-          : 'No significant rain expected — ideal conditions for outdoor plans.',
+      title: isRu ? 'Сухое окно 24 ч' : 'Dry 24-Hour Window',
+      description: isRu
+        ? 'Существенных осадков не ожидается — комфортно для прогулок и поездок.'
+        : 'No significant rain expected — ideal conditions for outdoor plans.',
     });
   }
 
   const diff = current.temperature - current.apparentTemperature;
   if (Math.abs(diff) >= 3) {
+    let feelsTitle;
+    if (diff > 0) {
+      feelsTitle = isRu ? `Ощущается холоднее на ${Math.round(diff)}°` : `Feels ${Math.round(diff)}° Colder`;
+    } else {
+      feelsTitle = isRu ? `Ощущается теплее на ${Math.round(-diff)}°` : `Feels ${Math.round(-diff)}° Warmer`;
+    }
+    const feelsText = formatTemp(current.apparentTemperature, unit);
     insights.push({
       severity: 'notice',
-      title:
-        diff > 0
-          ? lang === 'ru'
-            ? `Ощущается холоднее на ${Math.round(diff)}°`
-            : `Feels ${Math.round(diff)}° Colder`
-          : lang === 'ru'
-            ? `Ощущается теплее на ${Math.round(-diff)}°`
-            : `Feels ${Math.round(-diff)}° Warmer`,
-      description:
-        lang === 'ru'
-          ? `По ощущениям ${formatTemp(current.apparentTemperature, unit)} из-за ветра и влажности.`
-          : `Wind and humidity shift perceived temperature to ${formatTemp(current.apparentTemperature, unit)}.`,
+      title: feelsTitle,
+      description: isRu
+        ? `По ощущениям ${feelsText} из-за ветра и влажности.`
+        : `Wind and humidity shift perceived temperature to ${feelsText}.`,
     });
   }
 
-  const maxWind = Math.max(current.windSpeed, ...next24.map((h) => h.windSpeed));
+  const maxWind = findMaxWind(current.windSpeed, next24, false);
+  const windTitle = isRu
+    ? `Ветер ${Math.round(current.windSpeed)} км/ч · порывы ${Math.round(current.windGusts)}`
+    : `Wind ${Math.round(current.windSpeed)} km/h · gusts ${Math.round(current.windGusts)}`;
+
+  let windDesc;
+  if (maxWind >= 35) {
+    windDesc = isRu
+      ? 'Ветреная погода — учитывайте порывы при поездках.'
+      : 'Gusty conditions ahead — plan outdoor activities accordingly.';
+  } else {
+    windDesc = isRu ? 'Спокойная ветровая обстановка в течение суток.' : 'Calm to moderate breeze through the day.';
+  }
+
   insights.push({
     severity: maxWind >= 35 ? 'alert' : 'info',
-    title:
-      lang === 'ru'
-        ? `Ветер ${Math.round(current.windSpeed)} км/ч · порывы ${Math.round(current.windGusts)}`
-        : `Wind ${Math.round(current.windSpeed)} km/h · gusts ${Math.round(current.windGusts)}`,
-    description:
-      maxWind >= 35
-        ? lang === 'ru'
-          ? 'Ветреная погода — учитывайте порывы при поездках.'
-          : 'Gusty conditions ahead — plan outdoor activities accordingly.'
-        : lang === 'ru'
-          ? 'Спокойная ветровая обстановка в течение суток.'
-          : 'Calm to moderate breeze through the day.',
+    title: windTitle,
+    description: windDesc,
   });
 
   return insights.slice(0, 4);

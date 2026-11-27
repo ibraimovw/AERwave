@@ -38,6 +38,13 @@ export const TRANSLATIONS = {
       genericStep2: 'Выберите «Установить приложение» или «На экран «Домой»»',
       close: 'Закрыть',
     },
+    onboarding: {
+      title: 'В каком вы городе?',
+      subtitle: 'Укажите ваш город для точного прогноза и карты — выбор сохранится локально.',
+      searchPlaceholder: 'Введите название города…',
+      quickPickLabel: 'Популярные города',
+      skip: 'Оставить Москву по умолчанию',
+    },
     dayPhases: {
       dawn: 'Рассвет',
       day: 'День',
@@ -271,6 +278,13 @@ export const TRANSLATIONS = {
       genericStep1: 'Open your browser menu (⋮ or the install icon in the address bar)',
       genericStep2: 'Choose "Install app" or "Add to Home Screen"',
       close: 'Close',
+    },
+    onboarding: {
+      title: 'Which city are you in?',
+      subtitle: 'Pick your home city for accurate local forecasts and maps — saved locally.',
+      searchPlaceholder: 'Type a city name…',
+      quickPickLabel: 'Popular cities',
+      skip: 'Keep Moscow as default',
     },
     dayPhases: {
       dawn: 'Dawn',

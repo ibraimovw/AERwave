@@ -1,5 +1,66 @@
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
+// Подбираем количество частиц для текущей погоды
+function getParticleCount(mood) {
+  if (mood === 'rain' || mood === 'storm') return 85;
+  if (mood === 'snow') return 65;
+  if (mood === 'fog' || mood === 'cloudy') return 22;
+  return 40;
+}
+
+// Создаём одну частицу для анимации на фоне
+function createOneParticle(state, width, height) {
+  const windBias = Math.min(4, state.windSpeed / 12);
+
+  if (state.mood === 'rain' || state.mood === 'storm') {
+    return {
+      x: Math.random() * width,
+      y: Math.random() * height,
+      vx: 1.2 + windBias,
+      vy: 11 + Math.random() * 5,
+      size: 12 + Math.random() * 14,
+      alpha: 0.14 + Math.random() * 0.22,
+      phase: Math.random() * Math.PI * 2,
+    };
+  }
+
+  if (state.mood === 'snow') {
+    return {
+      x: Math.random() * width,
+      y: Math.random() * height,
+      vx: (Math.random() - 0.3) * 0.8 + windBias * 0.25,
+      vy: 1.0 + Math.random() * 1.4,
+      size: 1.6 + Math.random() * 2.8,
+      alpha: 0.25 + Math.random() * 0.45,
+      phase: Math.random() * Math.PI * 2,
+    };
+  }
+
+  if (state.mood === 'fog' || state.mood === 'cloudy') {
+    return {
+      x: Math.random() * width,
+      y: Math.random() * height * 0.8,
+      vx: 0.25 + Math.random() * 0.35 + windBias * 0.08,
+      vy: 0,
+      size: 120 + Math.random() * 170,
+      alpha: 0.03 + Math.random() * 0.03,
+      phase: Math.random() * Math.PI * 2,
+    };
+  }
+
+  // Звёзды и лёгкие огоньки для ясной погоды
+  return {
+    x: Math.random() * width,
+    y: Math.random() * height * 0.75,
+    vx: (Math.random() - 0.5) * 0.15,
+    vy: (Math.random() - 0.5) * 0.12,
+    size: state.dayPhase === 'night' ? 1 + Math.random() * 1.6 : 1.5 + Math.random() * 2.2,
+    alpha: 0.18 + Math.random() * 0.38,
+    phase: Math.random() * Math.PI * 2,
+  };
+}
+
+// Анимация осадков, облаков и звёзд на холсте
 export function startWeatherCanvas(canvas) {
   let state = {mood: 'clear', dayPhase: 'night', windSpeed: 6, theme: 'dark'};
   let particles = [];
@@ -15,7 +76,7 @@ export function startWeatherCanvas(canvas) {
     return {update() {}, destroy() {}};
   }
 
-  const resize = () => {
+  function resize() {
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     width = window.innerWidth;
     height = window.innerHeight;
@@ -24,69 +85,21 @@ export function startWeatherCanvas(canvas) {
     canvas.style.width = `${width}px`;
     canvas.style.height = `${height}px`;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  };
+  }
 
-  const seedParticles = () => {
-    const windBias = Math.min(4, state.windSpeed / 12);
-    const count =
-      state.mood === 'rain' || state.mood === 'storm'
-        ? 85
-        : state.mood === 'snow'
-          ? 65
-          : state.mood === 'fog' || state.mood === 'cloudy'
-            ? 22
-            : 40;
+  function seedParticles() {
+    const count = getParticleCount(state.mood);
+    particles = [];
+    for (let i = 0; i < count; i++) {
+      particles.push(createOneParticle(state, width, height));
+    }
+  }
 
-    particles = Array.from({length: count}, () => {
-      if (state.mood === 'rain' || state.mood === 'storm') {
-        return {
-          x: Math.random() * width,
-          y: Math.random() * height,
-          vx: 1.2 + windBias,
-          vy: 11 + Math.random() * 5,
-          size: 12 + Math.random() * 14,
-          alpha: 0.14 + Math.random() * 0.22,
-          phase: Math.random() * Math.PI * 2,
-        };
-      }
-      if (state.mood === 'snow') {
-        return {
-          x: Math.random() * width,
-          y: Math.random() * height,
-          vx: (Math.random() - 0.3) * 0.8 + windBias * 0.25,
-          vy: 1.0 + Math.random() * 1.4,
-          size: 1.6 + Math.random() * 2.8,
-          alpha: 0.25 + Math.random() * 0.45,
-          phase: Math.random() * Math.PI * 2,
-        };
-      }
-      if (state.mood === 'fog' || state.mood === 'cloudy') {
-        return {
-          x: Math.random() * width,
-          y: Math.random() * height * 0.8,
-          vx: 0.25 + Math.random() * 0.35 + windBias * 0.08,
-          vy: 0,
-          size: 120 + Math.random() * 170,
-          alpha: 0.03 + Math.random() * 0.03,
-          phase: Math.random() * Math.PI * 2,
-        };
-      }
-      return {
-        x: Math.random() * width,
-        y: Math.random() * height * 0.75,
-        vx: (Math.random() - 0.5) * 0.15,
-        vy: (Math.random() - 0.5) * 0.12,
-        size: state.dayPhase === 'night' ? 1 + Math.random() * 1.6 : 1.5 + Math.random() * 2.2,
-        alpha: 0.18 + Math.random() * 0.38,
-        phase: Math.random() * Math.PI * 2,
-      };
-    });
-  };
-
-  const tick = (now) => {
+  function tick(now) {
     ctx.clearRect(0, 0, width, height);
     const isLight = state.theme === 'light';
 
+    // Вспышки молний во время грозы
     if (state.mood === 'storm') {
       if (now > nextFlash) {
         flash = 0.15;
@@ -101,6 +114,7 @@ export function startWeatherCanvas(canvas) {
 
     for (const p of particles) {
       p.phase += 0.02;
+
       if (state.mood === 'rain' || state.mood === 'storm') {
         p.x += p.vx;
         p.y += p.vy;
@@ -109,6 +123,7 @@ export function startWeatherCanvas(canvas) {
           p.x = Math.random() * width;
         }
         if (p.x > width) p.x -= width;
+
         ctx.strokeStyle = isLight ? `rgba(59,130,246,${p.alpha * 1.1})` : `rgba(147,197,253,${p.alpha})`;
         ctx.lineWidth = 1.1;
         ctx.beginPath();
@@ -124,6 +139,7 @@ export function startWeatherCanvas(canvas) {
         }
         if (p.x > width) p.x -= width;
         if (p.x < 0) p.x += width;
+
         ctx.fillStyle = isLight ? `rgba(100,116,139,${p.alpha * 0.7})` : `rgba(244,244,248,${p.alpha})`;
         ctx.beginPath();
         ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
@@ -131,6 +147,7 @@ export function startWeatherCanvas(canvas) {
       } else if (state.mood === 'fog' || state.mood === 'cloudy') {
         p.x += p.vx;
         if (p.x - p.size > width) p.x = -p.size;
+
         const grad = ctx.createRadialGradient(p.x, p.y, 10, p.x, p.y, p.size);
         const rgb = isLight ? '100,116,139' : '185,195,225';
         grad.addColorStop(0, `rgba(${rgb},${p.alpha})`);
@@ -146,12 +163,15 @@ export function startWeatherCanvas(canvas) {
         if (p.x > width) p.x = 0;
         if (p.y < 0) p.y = height * 0.75;
         if (p.y > height * 0.75) p.y = 0;
+
         const twinkle = p.alpha * (0.65 + 0.35 * Math.sin(p.phase * 1.4));
-        ctx.fillStyle = isLight
-          ? `rgba(225,29,72,${twinkle * 0.34})`
-          : state.dayPhase === 'night'
-            ? `rgba(255,241,242,${twinkle})`
-            : `rgba(253,164,175,${twinkle * 0.45})`;
+        if (isLight) {
+          ctx.fillStyle = `rgba(225,29,72,${twinkle * 0.34})`;
+        } else if (state.dayPhase === 'night') {
+          ctx.fillStyle = `rgba(255,241,242,${twinkle})`;
+        } else {
+          ctx.fillStyle = `rgba(253,164,175,${twinkle * 0.45})`;
+        }
         ctx.beginPath();
         ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
         ctx.fill();
@@ -159,7 +179,7 @@ export function startWeatherCanvas(canvas) {
     }
 
     animId = window.requestAnimationFrame(tick);
-  };
+  }
 
   resize();
   seedParticles();
@@ -180,9 +200,11 @@ export function startWeatherCanvas(canvas) {
   };
 }
 
+// Строим плавную кривую графика по точкам
 function buildSmoothPath(coords) {
   if (coords.length === 0) return '';
   if (coords.length === 1) return `M ${coords[0].x} ${coords[0].y}`;
+
   let d = `M ${coords[0].x.toFixed(1)} ${coords[0].y.toFixed(1)}`;
   for (let i = 0; i < coords.length - 1; i++) {
     const p0 = coords[i];
@@ -193,14 +215,20 @@ function buildSmoothPath(coords) {
   return d;
 }
 
+// Мини-график температуры (SVG)
 export function createSparkline({title, points, unitSuffix = '°', height = 78, showSecondary = false}) {
   const wrap = document.createElement('div');
   wrap.className = 'sparkline-wrap';
   if (!points || points.length < 2) return wrap;
 
-  const allVals = points.flatMap((p) =>
-    showSecondary && typeof p.secondaryValue === 'number' ? [p.value, p.secondaryValue] : [p.value]
-  );
+  const allVals = [];
+  for (const p of points) {
+    allVals.push(p.value);
+    if (showSecondary && typeof p.secondaryValue === 'number') {
+      allVals.push(p.secondaryValue);
+    }
+  }
+
   const minVal = Math.min(...allVals);
   const maxVal = Math.max(...allVals);
   const range = Math.max(1, maxVal - minVal);
@@ -210,15 +238,24 @@ export function createSparkline({title, points, unitSuffix = '°', height = 78, 
   const plotW = width - padX * 2;
   const plotH = height - padY * 2;
 
-  const toCoords = (vals) =>
-    vals.map((val, idx) => ({
-      x: padX + (idx / Math.max(1, vals.length - 1)) * plotW,
-      y: padY + (1 - (val - minVal) / range) * plotH,
-    }));
+  function toCoords(vals) {
+    const coords = [];
+    for (let idx = 0; idx < vals.length; idx++) {
+      coords.push({
+        x: padX + (idx / Math.max(1, vals.length - 1)) * plotW,
+        y: padY + (1 - (vals[idx] - minVal) / range) * plotH,
+      });
+    }
+    return coords;
+  }
 
   const primaryCoords = toCoords(points.map((p) => p.value));
   const primaryPath = buildSmoothPath(primaryCoords);
-  const areaPath = `${primaryPath} L ${primaryCoords[primaryCoords.length - 1].x.toFixed(1)} ${(height - 2).toFixed(1)} L ${primaryCoords[0].x.toFixed(1)} ${(height - 2).toFixed(1)} Z`;
+  const lastX = primaryCoords[primaryCoords.length - 1].x.toFixed(1);
+  const firstX = primaryCoords[0].x.toFixed(1);
+  const bottomY = (height - 2).toFixed(1);
+  const areaPath = `${primaryPath} L ${lastX} ${bottomY} L ${firstX} ${bottomY} Z`;
+
   const secondaryPath = showSecondary
     ? buildSmoothPath(toCoords(points.map((p) => p.secondaryValue ?? p.value)))
     : '';
@@ -248,19 +285,19 @@ export function createSparkline({title, points, unitSuffix = '°', height = 78, 
   grad.setAttribute('y1', '0');
   grad.setAttribute('x2', '0');
   grad.setAttribute('y2', '1');
-  const s1 = document.createElementNS(SVG_NS, 'stop');
-  s1.setAttribute('offset', '0%');
-  s1.setAttribute('stop-color', 'var(--spark-max, var(--pink))');
-  s1.setAttribute('stop-opacity', '0.22');
-  const s2 = document.createElementNS(SVG_NS, 'stop');
-  s2.setAttribute('offset', '58%');
-  s2.setAttribute('stop-color', 'var(--spark-min, var(--blue))');
-  s2.setAttribute('stop-opacity', '0.07');
-  const s3 = document.createElementNS(SVG_NS, 'stop');
-  s3.setAttribute('offset', '100%');
-  s3.setAttribute('stop-color', 'var(--spark-min, var(--blue))');
-  s3.setAttribute('stop-opacity', '0');
-  grad.append(s1, s2, s3);
+
+  const stops = [
+    {offset: '0%', color: 'var(--spark-max, var(--pink))', opacity: '0.22'},
+    {offset: '58%', color: 'var(--spark-min, var(--blue))', opacity: '0.07'},
+    {offset: '100%', color: 'var(--spark-min, var(--blue))', opacity: '0'},
+  ];
+  for (const s of stops) {
+    const stopEl = document.createElementNS(SVG_NS, 'stop');
+    stopEl.setAttribute('offset', s.offset);
+    stopEl.setAttribute('stop-color', s.color);
+    stopEl.setAttribute('stop-opacity', s.opacity);
+    grad.appendChild(stopEl);
+  }
   defs.appendChild(grad);
   svg.appendChild(defs);
 
@@ -304,8 +341,10 @@ export function createSparkline({title, points, unitSuffix = '°', height = 78, 
   dot.style.display = 'none';
   svg.append(guide, dot);
 
+  // Зоны наведения для подсказки значения по дням/часам
   const sliceW = plotW / points.length;
-  primaryCoords.forEach((coord, idx) => {
+  for (let idx = 0; idx < primaryCoords.length; idx++) {
+    const coord = primaryCoords[idx];
     const rect = document.createElementNS(SVG_NS, 'rect');
     rect.setAttribute('x', String(Math.max(0, coord.x - sliceW / 2)));
     rect.setAttribute('y', '0');
@@ -314,10 +353,11 @@ export function createSparkline({title, points, unitSuffix = '°', height = 78, 
     rect.setAttribute('fill', 'transparent');
     rect.addEventListener('mouseenter', () => {
       const p = points[idx];
-      readoutEl.textContent =
-        showSecondary && typeof p.secondaryValue === 'number'
-          ? `${p.label} · ${Math.round(p.value)}${unitSuffix} / ${Math.round(p.secondaryValue)}${unitSuffix}`
-          : `${p.label} · ${Math.round(p.value)}${unitSuffix}`;
+      if (showSecondary && typeof p.secondaryValue === 'number') {
+        readoutEl.textContent = `${p.label} · ${Math.round(p.value)}${unitSuffix} / ${Math.round(p.secondaryValue)}${unitSuffix}`;
+      } else {
+        readoutEl.textContent = `${p.label} · ${Math.round(p.value)}${unitSuffix}`;
+      }
       readoutEl.style.color = 'var(--pink)';
       guide.setAttribute('x1', String(coord.x));
       guide.setAttribute('x2', String(coord.x));
@@ -327,7 +367,7 @@ export function createSparkline({title, points, unitSuffix = '°', height = 78, 
       dot.style.display = '';
     });
     svg.appendChild(rect);
-  });
+  }
 
   svg.addEventListener('mouseleave', () => {
     readoutEl.textContent = defaultReadout;

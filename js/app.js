@@ -35,12 +35,11 @@ import {TRANSLATIONS} from './i18n.js';
 import {createIcon, createWeatherIcon} from './icons.js';
 import {createWeatherMapView} from './map.js';
 
-/* ============================================================================
- * Constants & State Persistence
- * ========================================================================== */
+/* === Константы и хранилище настроек === */
 
 const SETTINGS_KEY = 'aerwave_vanilla_settings_v7';
 const FAVORITES_KEY = 'aerwave_vanilla_favorites_v7';
+const ONBOARDED_KEY = 'aerwave_vanilla_onboarded_v7';
 const MAX_FAVORITES = 10;
 
 const DEFAULT_METRICS = [
@@ -66,6 +65,7 @@ const ALL_METRICS = [
 const DEFAULT_STARTER_CITY = DEFAULT_CITIES[2]; // Москва
 const DEFAULT_FAVORITES = DEFAULT_CITIES.slice(0, 4); // Нью-Йорк, Стокгольм, Москва, Бишкек
 
+// Загрузка настроек из localStorage
 function loadSettings() {
   try {
     const raw = localStorage.getItem(SETTINGS_KEY);
@@ -80,7 +80,9 @@ function loadSettings() {
         metrics: Array.isArray(p.metrics) && p.metrics.length ? p.metrics : DEFAULT_METRICS,
       };
     }
-  } catch {}
+  } catch {
+    // Игнорируем ошибки чтения памяти
+  }
   return {
     lang: 'ru',
     unit: 'C',
@@ -91,23 +93,30 @@ function loadSettings() {
   };
 }
 
+// Загрузка списка избранных городов
 function loadFavorites() {
   try {
     const raw = localStorage.getItem(FAVORITES_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed)) {
-        const ids = parsed.map((c) => c?.id).join(',');
-        if (ids === '524901,1850147,2643743') {
+        const ids = [];
+        for (let i = 0; i < parsed.length; i++) {
+          ids.push(parsed[i]?.id);
+        }
+        if (ids.join(',') === '524901,1850147,2643743') {
           return DEFAULT_FAVORITES;
         }
         return parsed.slice(0, MAX_FAVORITES);
       }
     }
-  } catch {}
+  } catch {
+    // При ошибке возвращаем стандартный список
+  }
   return DEFAULT_FAVORITES;
 }
 
+// Проверка совпадения двух городов по id или координатам
 function sameCity(a, b) {
   if (a.id && b.id && a.id === b.id) return true;
   return (
@@ -116,8 +125,16 @@ function sameCity(a, b) {
   );
 }
 
+let isFirstVisit = false;
+try {
+  isFirstVisit = !localStorage.getItem(SETTINGS_KEY) && !localStorage.getItem(ONBOARDED_KEY);
+} catch {
+  // Игнорируем ограничения localStorage
+}
+
 const initial = loadSettings();
 
+// Глобальное состояние приложения
 const state = {
   lang: initial.lang,
   unit: initial.unit,
@@ -147,6 +164,7 @@ const state = {
   isIOS: /iphone|ipad|ipod/i.test(navigator.userAgent),
 };
 
+// Ссылки на основные элементы страницы
 const refs = {
   sidebar: document.getElementById('sidebar'),
   topbar: document.getElementById('topbar'),
@@ -179,18 +197,20 @@ function saveSettings() {
         metrics: state.metrics,
       })
     );
-  } catch {}
+  } catch {
+    // Игнорируем ошибку записи
+  }
 }
 
 function saveFavorites() {
   try {
     localStorage.setItem(FAVORITES_KEY, JSON.stringify(state.favorites));
-  } catch {}
+  } catch {
+    // Игнорируем ошибку записи
+  }
 }
 
-/* ============================================================================
- * Atmosphere, Scroll Lock & PWA Helpers
- * ========================================================================== */
+/* === Атмосфера, блокировка скролла и установка приложения === */
 
 function syncAtmosphere() {
   const tz = state.weather?.timezone ?? state.city.timezone ?? 'UTC';
@@ -262,18 +282,27 @@ function makeInstallButton(compact = false, extraClass = '') {
 
   const isTopbar = extraClass.includes('topbar-install-btn');
   const labelText = isTopbar ? t.pwa.downloadShort : t.pwa.installShort;
+  const baseClass = state.deferredPrompt || isTopbar ? 'btn-primary' : 'btn-subtle';
+  const iconClass = state.deferredPrompt || isTopbar ? 'sm' : 'sm c-pink';
+
+  let btnStyle;
+  if (compact) {
+    btnStyle = {width: '40px', height: '40px', padding: '0'};
+  } else if (!isTopbar) {
+    btnStyle = {width: '100%'};
+  }
 
   return el(
     'button',
     {
       type: 'button',
-      className: `${state.deferredPrompt || isTopbar ? 'btn-primary' : 'btn-subtle'} ${extraClass}`.trim(),
-      style: compact ? {width: '40px', height: '40px', padding: '0'} : isTopbar ? undefined : {width: '100%'},
+      className: `${baseClass} ${extraClass}`.trim(),
+      style: btnStyle,
       title: t.pwa.installBtn,
       'aria-label': t.pwa.installBtn,
       onClick: triggerInstall,
     },
-    createIcon('download', state.deferredPrompt || isTopbar ? 'sm' : 'sm c-pink'),
+    createIcon('download', iconClass),
     !compact && el('span', {}, labelText)
   );
 }
@@ -312,9 +341,195 @@ function showInstallModal() {
   refs.iosModal.hidden = false;
 }
 
-/* ============================================================================
- * Navigation Chrome (Sidebar, TopBar, Mobile Dock, Drawer, Footer)
- * ========================================================================== */
+// Модальное окно выбора города при первом заходе
+function showCityOnboardingModal() {
+  const t = TRANSLATIONS[state.lang];
+  let onboardingAbort = null;
+  let timer = null;
+
+  const markOnboarded = () => {
+    try {
+      localStorage.setItem(ONBOARDED_KEY, '1');
+    } catch {
+      // Игнорируем ошибку записи
+    }
+    onboardingAbort?.abort();
+    refs.iosModal.hidden = true;
+  };
+
+  const pickCity = (city) => {
+    markOnboarded();
+    selectCity(city);
+  };
+
+  const skipOnboarding = () => {
+    markOnboarded();
+    saveSettings();
+  };
+
+  const searchInput = el('input', {
+    type: 'text',
+    className: 'search-input',
+    placeholder: t.onboarding.searchPlaceholder,
+    'aria-label': t.onboarding.searchPlaceholder,
+    autofocus: true,
+  });
+
+  const resultsBox = el('div', {className: 'city-prompt-results', hidden: true});
+
+  searchInput.addEventListener('input', () => {
+    const q = searchInput.value.trim();
+    clearTimeout(timer);
+    if (q.length < 2) {
+      onboardingAbort?.abort();
+      resultsBox.hidden = true;
+      setChildren(resultsBox, []);
+      return;
+    }
+
+    timer = setTimeout(async () => {
+      onboardingAbort?.abort();
+      onboardingAbort = new AbortController();
+      resultsBox.hidden = false;
+      setChildren(
+        resultsBox,
+        el('div', {className: 'search-sub', style: {padding: '10px 12px'}}, t.topbar.searching)
+      );
+      try {
+        const list = await searchCities(q, state.lang, onboardingAbort.signal);
+        if (onboardingAbort.signal.aborted) return;
+        if (list.length === 0) {
+          setChildren(
+            resultsBox,
+            el('div', {className: 'search-sub', style: {padding: '10px 12px'}}, t.topbar.noResults)
+          );
+          return;
+        }
+        const items = [];
+        for (let i = 0; i < list.length; i++) {
+          const c = list[i];
+          const subText = [c.admin1, c.country].filter(Boolean).join(' · ');
+          items.push(
+            el(
+              'button',
+              {
+                type: 'button',
+                className: 'search-item',
+                onClick: () => pickCity(c),
+              },
+              el(
+                'div',
+                {style: {minWidth: '0'}},
+                el('div', {style: {fontWeight: '500', fontSize: '14px'}}, c.name),
+                el('div', {className: 'search-sub'}, subText)
+              ),
+              el(
+                'span',
+                {className: 'mono muted-xs', style: {fontSize: '11px', flexShrink: '0'}},
+                `${c.latitude.toFixed(1)}°, ${c.longitude.toFixed(1)}°`
+              )
+            )
+          );
+        }
+        setChildren(resultsBox, items);
+      } catch (err) {
+        if (err.name !== 'AbortError') {
+          resultsBox.hidden = true;
+        }
+      }
+    }, 260);
+  });
+
+  const quickChips = [];
+  const quickList = DEFAULT_CITIES.slice(0, 6);
+  for (let i = 0; i < quickList.length; i++) {
+    const c = quickList[i];
+    const disp = getLocalizedCityDisplay(c, state.lang);
+    quickChips.push(
+      el(
+        'button',
+        {
+          type: 'button',
+          className: 'chip-btn',
+          onClick: () => pickCity(c),
+        },
+        disp.name
+      )
+    );
+  }
+
+  setChildren(
+    refs.iosModal,
+    el(
+      'div',
+      {
+        className: 'glass-panel-elevated city-prompt-card',
+        role: 'dialog',
+        'aria-modal': 'true',
+      },
+      el(
+        'div',
+        {style: {display: 'flex', alignItems: 'flex-start', gap: '12px'}},
+        el(
+          'div',
+          {
+            style: {
+              width: '38px',
+              height: '38px',
+              borderRadius: '11px',
+              background: 'rgba(251, 113, 133, 0.14)',
+              border: '1px solid rgba(251, 113, 133, 0.32)',
+              display: 'grid',
+              placeItems: 'center',
+              flexShrink: '0',
+            },
+          },
+          createIcon('pin', 'sm c-pink')
+        ),
+        el(
+          'div',
+          {},
+          el('h3', {className: 'section-title'}, t.onboarding.title),
+          el('p', {className: 'muted-sub', style: {margin: '4px 0 0', fontSize: '13px'}}, t.onboarding.subtitle)
+        )
+      ),
+      el(
+        'div',
+        {className: 'search-wrap', style: {width: '100%'}},
+        createIcon('search', 'search-icon sm'),
+        searchInput
+      ),
+      resultsBox,
+      el(
+        'div',
+        {},
+        el(
+          'div',
+          {className: 'muted-xs', style: {textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '8px'}},
+          t.onboarding.quickPickLabel
+        ),
+        el('div', {className: 'city-prompt-chips'}, quickChips)
+      ),
+      el(
+        'div',
+        {style: {display: 'flex', justifyContent: 'flex-end'}},
+        el(
+          'button',
+          {
+            type: 'button',
+            className: 'btn-subtle',
+            onClick: skipOnboarding,
+          },
+          t.onboarding.skip
+        )
+      )
+    )
+  );
+  refs.iosModal.hidden = false;
+  setTimeout(() => searchInput.focus(), 60);
+}
+
+/* === Навигация: боковое меню, верхняя панель, док, шторка, футер === */
 
 function renderSidebar() {
   const t = TRANSLATIONS[state.lang];
@@ -461,9 +676,10 @@ function renderTopBar() {
   let highlightIdx = -1;
 
   const paintResults = () => {
-    setChildren(
-      dropdown,
-      results.map((c, idx) =>
+    const nodes = [];
+    for (let idx = 0; idx < results.length; idx++) {
+      const c = results[idx];
+      nodes.push(
         el(
           'button',
           {
@@ -494,8 +710,9 @@ function renderTopBar() {
             `${c.latitude.toFixed(1)}°, ${c.longitude.toFixed(1)}°`
           )
         )
-      )
-    );
+      );
+    }
+    setChildren(dropdown, nodes);
   };
 
   searchInput.addEventListener('keydown', (e) => {
@@ -618,7 +835,7 @@ function renderTopBar() {
       ),
       el(
         'div',
-        {className: 'seg-group', role: 'group', 'aria-label': t.topbar.langLabel},
+        {className: 'seg-group topbar-lang-group', role: 'group', 'aria-label': t.topbar.langLabel},
         el('span', {className: 'seg-label mono'}, t.topbar.langLabel),
         ['ru', 'en'].map((code) =>
           el(
@@ -634,7 +851,7 @@ function renderTopBar() {
       ),
       el(
         'div',
-        {className: 'seg-group', role: 'group', 'aria-label': t.topbar.unitLabel},
+        {className: 'seg-group topbar-unit-group', role: 'group', 'aria-label': t.topbar.unitLabel},
         el('span', {className: 'seg-label mono'}, t.topbar.unitLabel),
         ['C', 'F'].map((u) =>
           el(
@@ -859,39 +1076,50 @@ function renderBanners() {
   setChildren(refs.banners, nodes);
 }
 
-/* ============================================================================
- * Home View
- * ========================================================================== */
+/* === Главный экран: вспомогательные функции и блоки === */
 
-function renderHomeView() {
-  const t = TRANSLATIONS[state.lang];
-  const w = state.weather;
-  const disp = getLocalizedCityDisplay(w.city, state.lang);
-  const {dayPhase} = syncAtmosphere();
-  const clock = getCityLocalClock(w.timezone);
-  const today = w.daily[0];
-  const tomorrow = w.daily[1];
-  const weekend = w.daily
-    .filter((d) => {
-      const [y, m, day] = d.date.split('-').map(Number);
-      const dow = new Date(Date.UTC(y, m - 1, day, 12)).getUTCDay();
-      return dow === 0 || dow === 6;
-    })
-    .slice(0, 2);
+function getHeroFallbackGradient(dayPhase) {
+  if (dayPhase === 'dawn') {
+    return 'radial-gradient(circle at 22% 24%, rgba(244,63,94,0.34), transparent 48%), radial-gradient(circle at 78% 72%, rgba(251,146,60,0.24), transparent 52%), #0c0710';
+  }
+  if (dayPhase === 'day') {
+    return 'radial-gradient(circle at 22% 24%, rgba(251,113,133,0.30), transparent 50%), radial-gradient(circle at 78% 72%, rgba(56,189,248,0.28), transparent 52%), #0a0912';
+  }
+  if (dayPhase === 'dusk') {
+    return 'radial-gradient(circle at 24% 24%, rgba(225,29,72,0.34), transparent 48%), radial-gradient(circle at 80% 70%, rgba(129,140,248,0.30), transparent 54%), #0c0711';
+  }
+  return 'radial-gradient(circle at 25% 25%, rgba(244,63,94,0.26), transparent 48%), radial-gradient(circle at 78% 74%, rgba(129,140,248,0.24), transparent 54%), #08060b';
+}
 
-  // Hero background media + warm berry-obsidian fallback gradient
+function getInsightColorClass(severity) {
+  if (severity === 'alert') return 'c-pink';
+  if (severity === 'notice') return 'c-violet';
+  return 'c-sky';
+}
+
+function getAqiMeta(aqi, t) {
+  if (aqi <= 20) return {cls: 'c-emerald', label: t.home.aqi.levels.good};
+  if (aqi <= 40) return {cls: 'c-sky', label: t.home.aqi.levels.fair};
+  if (aqi <= 60) return {cls: 'c-amber', label: t.home.aqi.levels.moderate};
+  if (aqi <= 80) return {cls: 'c-orange', label: t.home.aqi.levels.poor};
+  return {cls: 'c-pink', label: t.home.aqi.levels.veryPoor};
+}
+
+function getPressureTrendMeta(trend) {
+  if (trend === 'rising') return {icon: 'arrowUpRight', cls: 'sm c-emerald'};
+  if (trend === 'falling') return {icon: 'arrowDownRight', cls: 'sm c-pink'};
+  return {icon: 'minus', cls: 'sm c-sky'};
+}
+
+// Сбор блока панорамы города и текущей погоды
+function buildHeroSection(w, today, tomorrow, weekend, disp, clock, dayPhase, t) {
   const heroBg = el('div', {className: 'hero-bg'});
   let heroImgEl = null;
-  const fallbackGrad =
-    dayPhase === 'dawn'
-      ? 'radial-gradient(circle at 22% 24%, rgba(244,63,94,0.34), transparent 48%), radial-gradient(circle at 78% 72%, rgba(251,146,60,0.24), transparent 52%), #0c0710'
-      : dayPhase === 'day'
-        ? 'radial-gradient(circle at 22% 24%, rgba(251,113,133,0.30), transparent 50%), radial-gradient(circle at 78% 72%, rgba(56,189,248,0.28), transparent 52%), #0a0912'
-        : dayPhase === 'dusk'
-          ? 'radial-gradient(circle at 24% 24%, rgba(225,29,72,0.34), transparent 48%), radial-gradient(circle at 80% 70%, rgba(129,140,248,0.30), transparent 54%), #0c0711'
-          : 'radial-gradient(circle at 25% 25%, rgba(244,63,94,0.26), transparent 48%), radial-gradient(circle at 78% 74%, rgba(129,140,248,0.24), transparent 54%), #08060b';
+  const fallbackEl = el('div', {
+    className: 'hero-fallback-grad',
+    style: {background: getHeroFallbackGradient(dayPhase)},
+  });
 
-  const fallbackEl = el('div', {className: 'hero-fallback-grad', style: {background: fallbackGrad}});
   if (state.cityImage?.url) {
     heroImgEl = el('img', {
       src: state.cityImage.url,
@@ -940,6 +1168,25 @@ function renderHomeView() {
   function buildTempHeroBody(isNowMode, isGhost = false) {
     const tempVal = isNowMode || !today ? w.current.temperature : today.tempMax;
     const code = isNowMode || !today ? w.current.weatherCode : today.weatherCode;
+    const feelsText =
+      `${t.home.feelsLike} ${formatTemp(w.current.apparentTemperature, state.unit)}` +
+      (today
+        ? ` · ${t.home.high} ${formatTemp(today.tempMax, state.unit)} / ${t.home.low} ${formatTemp(today.tempMin, state.unit)}`
+        : '');
+
+    let creditEl = null;
+    if (state.cityImage) {
+      if (!isGhost && state.cityImage.sourceUrl) {
+        creditEl = el(
+          'a',
+          {href: state.cityImage.sourceUrl, target: '_blank', rel: 'noreferrer', className: 'hero-credit'},
+          creditLabel
+        );
+      } else {
+        creditEl = el('span', {className: 'hero-credit'}, creditLabel);
+      }
+    }
+
     return el(
       'div',
       {className: 'row-between gap-md', style: {alignItems: 'flex-end'}},
@@ -949,7 +1196,7 @@ function renderHomeView() {
         el(
           'div',
           {className: 'hero-temp-row'},
-          el('div', {className: 'hero-temp aer-grad-text mono'}, formatTemp(tempVal, state.unit)),
+          el('div', {className: 'hero-temp aer-hero-temp-text mono'}, formatTemp(tempVal, state.unit)),
           el(
             'div',
             {},
@@ -962,23 +1209,13 @@ function renderHomeView() {
             el(
               'div',
               {className: 'mono', style: {fontSize: '13.5px', color: 'rgba(248,238,242,0.9)', marginTop: '6px'}},
-              `${t.home.feelsLike} ${formatTemp(w.current.apparentTemperature, state.unit)}` +
-                (today
-                  ? ` · ${t.home.high} ${formatTemp(today.tempMax, state.unit)} / ${t.home.low} ${formatTemp(today.tempMin, state.unit)}`
-                  : '')
+              feelsText
             )
           )
         ),
         el('p', {className: 'hero-summary'}, generateHeroDailySummary(w, state.unit, state.lang))
       ),
-      state.cityImage &&
-        (!isGhost && state.cityImage.sourceUrl
-          ? el(
-              'a',
-              {href: state.cityImage.sourceUrl, target: '_blank', rel: 'noreferrer', className: 'hero-credit'},
-              creditLabel
-            )
-          : el('span', {className: 'hero-credit'}, creditLabel))
+      creditEl
     );
   }
 
@@ -1016,7 +1253,7 @@ function renderHomeView() {
         {className: 'mono', style: {display: 'flex', gap: '18px', flexWrap: 'wrap'}},
         el(
           'span',
-          {className: 'aer-grad-text', style: {fontSize: '19px', fontWeight: '700'}},
+          {className: 'aer-hero-temp-text', style: {fontSize: '19px', fontWeight: '700'}},
           `${formatTemp(tomorrow.tempMax, state.unit)} / ${formatTemp(tomorrow.tempMin, state.unit)}`
         ),
         el('span', {}, `${Math.round(tomorrow.precipProbMax)}%`),
@@ -1047,7 +1284,7 @@ function renderHomeView() {
             {className: 'mono', style: {textAlign: 'right', flexShrink: '0'}},
             el(
               'div',
-              {className: 'aer-grad-text', style: {fontWeight: '700', fontSize: '16px'}},
+              {className: 'aer-hero-temp-text', style: {fontWeight: '700', fontSize: '16px'}},
               `${formatTemp(day.tempMax, state.unit)} / ${formatTemp(day.tempMin, state.unit)}`
             ),
             el(
@@ -1061,6 +1298,7 @@ function renderHomeView() {
     );
   }
 
+  // Невидимая база держит одинаковую высоту карточки при переключении вкладок
   const nowSizer = el(
     'div',
     {
@@ -1128,6 +1366,7 @@ function renderHomeView() {
     )
   );
 
+  // Лёгкий 3D-наклон карточки при движении мыши
   hero.addEventListener('pointermove', (e) => {
     if (e.pointerType !== 'mouse') return;
     const rect = hero.getBoundingClientRect();
@@ -1143,132 +1382,158 @@ function renderHomeView() {
     if (heroImgEl) heroImgEl.style.transform = 'scale(1.06)';
   });
 
-  const stack = el('div', {className: 'view-stack'}, hero);
+  return hero;
+}
 
-  // Weather alerts (when active)
-  const alerts = generateWeatherAlerts(w, state.lang);
-  if (alerts.length > 0) {
-    stack.appendChild(
-      el(
-        'section',
-        {className: 'glass-panel card-pad', style: {borderColor: 'rgba(251,113,133,0.45)'}},
+// Сбор блока метеопредупреждений
+function buildAlertsSection(alerts, t) {
+  return el(
+    'section',
+    {className: 'glass-panel card-pad', style: {borderColor: 'rgba(251,113,133,0.45)'}},
+    el(
+      'div',
+      {
+        className: 'c-pink font-ibr',
+        style: {
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          fontSize: '12px',
+          fontWeight: '600',
+          textTransform: 'uppercase',
+          letterSpacing: '0.06em',
+          marginBottom: '12px',
+        },
+      },
+      createIcon('alert', 'sm'),
+      t.home.alertsTitle
+    ),
+    el(
+      'div',
+      {className: 'grid-2'},
+      alerts.map((a) =>
         el(
           'div',
-          {
-            className: 'c-pink font-ibr',
-            style: {
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              fontSize: '12px',
-              fontWeight: '600',
-              textTransform: 'uppercase',
-              letterSpacing: '0.06em',
-              marginBottom: '12px',
-            },
-          },
-          createIcon('alert', 'sm'),
-          t.home.alertsTitle
+          {className: 'glass-subtle metric-box'},
+          el('strong', {style: {fontSize: '14px'}}, a.title),
+          el('p', {className: 'muted-sub', style: {margin: 0}}, a.description)
+        )
+      )
+    )
+  );
+}
+
+// Сбор блока 01 · Почасовой прогноз на 24 часа
+function buildHourlySection(w, t) {
+  const next24 = getNext24Hours(w);
+  const sparkPoints = [];
+  const pills = [];
+
+  for (let i = 0; i < next24.length; i++) {
+    const h = next24[i];
+    const timeLabel = i === 0 ? t.home.now : formatIsoTime(h.time);
+    sparkPoints.push({
+      label: timeLabel,
+      value: convertTempExact(h.temperature, state.unit),
+    });
+    pills.push(
+      el(
+        'div',
+        {className: `hour-pill ${i === 0 ? 'now' : ''}`},
+        el('span', {className: 'mono muted-xs'}, timeLabel),
+        createWeatherIcon(h.weatherCode, h.isDay),
+        el(
+          'span',
+          {className: 'mono', style: {fontWeight: '600', fontSize: '15px'}},
+          formatTemp(h.temperature, state.unit)
         ),
         el(
-          'div',
-          {className: 'grid-2'},
-          alerts.map((a) =>
-            el(
-              'div',
-              {className: 'glass-subtle metric-box'},
-              el('strong', {style: {fontSize: '14px'}}, a.title),
-              el('p', {className: 'muted-sub', style: {margin: 0}}, a.description)
-            )
-          )
+          'span',
+          {className: 'mono c-sky', style: {fontSize: '11px'}},
+          `${Math.round(h.precipProb)}%`
         )
       )
     );
   }
 
-  // 01 · Insights & lifestyle guidance
-  const insights = generateWeatherInsights(w, state.unit, state.lang);
-  stack.appendChild(
-    attachSpotlight(
+  return attachSpotlight(
+    el(
+      'section',
+      {className: 'glass-panel card-pad'},
       el(
-        'section',
-        {className: 'glass-panel aer-top-accent card-pad'},
+        'div',
+        {className: 'section-head'},
         el(
           'div',
-          {className: 'section-head'},
-          el(
-            'div',
-            {className: 'sec-head-left'},
-            el('span', {className: 'sec-num'}, '01'),
-            el('h2', {className: 'section-title'}, t.home.insightsTitle)
-          ),
-          el('span', {className: 'muted-xs'}, t.home.insightsSubtitle)
+          {className: 'sec-head-left'},
+          el('span', {className: 'sec-num'}, '01'),
+          el('h2', {className: 'section-title'}, t.home.hourlyTitle)
         ),
-        el(
-          'div',
-          {className: 'grid-4'},
-          insights.map((ins) => {
-            const cls =
-              ins.severity === 'alert'
-                ? 'c-pink'
-                : ins.severity === 'notice'
-                  ? 'c-violet'
-                  : 'c-sky';
-            return el(
-              'div',
-              {className: 'glass-subtle metric-box'},
-              el('div', {className: cls, style: {fontWeight: '600', fontSize: '14px'}}, ins.title),
-              el('p', {className: 'muted-sub', style: {margin: 0}}, ins.description)
-            );
-          })
-        )
-      )
+        el('span', {className: 'mono muted-xs'}, `${next24.length}h`)
+      ),
+      createSparkline({
+        title: t.home.hourlySparklineTitle,
+        points: sparkPoints,
+      }),
+      el('div', {className: 'hourly-strip', style: {marginTop: '16px'}}, pills)
     )
   );
+}
 
-  // 02 · Key metrics + Air quality + Sun & Moon
+// Сбор блока 02 · Советы и аналитика
+function buildInsightsSection(w, t) {
+  const insights = generateWeatherInsights(w, state.unit, state.lang);
+  const cards = [];
+
+  for (let i = 0; i < insights.length; i++) {
+    const ins = insights[i];
+    const cls = getInsightColorClass(ins.severity);
+    cards.push(
+      el(
+        'div',
+        {className: 'glass-subtle metric-box'},
+        el('div', {className: cls, style: {fontWeight: '600', fontSize: '14px'}}, ins.title),
+        el('p', {className: 'muted-sub', style: {margin: 0}}, ins.description)
+      )
+    );
+  }
+
+  return attachSpotlight(
+    el(
+      'section',
+      {className: 'glass-panel aer-top-accent card-pad'},
+      el(
+        'div',
+        {className: 'section-head'},
+        el(
+          'div',
+          {className: 'sec-head-left'},
+          el('span', {className: 'sec-num'}, '02'),
+          el('h2', {className: 'section-title'}, t.home.insightsTitle)
+        ),
+        el('span', {className: 'muted-xs'}, t.home.insightsSubtitle)
+      ),
+      el('div', {className: 'grid-4'}, cards)
+    )
+  );
+}
+
+// Сбор блока 03 · Основные показатели и качество воздуха
+function buildMetricsSection(w, t) {
   const trend = computePressureTrend(w);
-  const sun = today
-    ? computeSunProgress(w.timezone, today.sunrise, today.sunset)
-    : {
-        progress: 0.5,
-        state: 'during',
-        daylightHours: 12,
-        daylightMinutes: 0,
-        goldenEvening: '18:00–18:50',
-      };
-  const moon = computeMoonPhase(Date.now(), state.lang);
+  const trendMeta = getPressureTrendMeta(trend);
   const windDir = getWindDirectionLabel(w.current.windDirection, t.windDirs);
   const uvCat = getUvCategory(w.current.uvIndex, t.uvLevels);
-  const getAqiCls = (aqi) =>
-    aqi <= 20
-      ? 'c-emerald'
-      : aqi <= 40
-        ? 'c-sky'
-        : aqi <= 60
-          ? 'c-amber'
-          : aqi <= 80
-            ? 'c-orange'
-            : 'c-pink';
-  const getAqiLabel = (aqi) =>
-    aqi <= 20
-      ? t.home.aqi.levels.good
-      : aqi <= 40
-        ? t.home.aqi.levels.fair
-        : aqi <= 60
-          ? t.home.aqi.levels.moderate
-          : aqi <= 80
-            ? t.home.aqi.levels.poor
-            : t.home.aqi.levels.veryPoor;
+  const aqiMeta = w.airQuality ? getAqiMeta(w.airQuality.europeanAqi, t) : null;
 
-  const metricsPanel = attachSpotlight(
+  return attachSpotlight(
     el(
       'section',
       {className: 'glass-panel card-pad', style: {display: 'flex', flexDirection: 'column', gap: '18px'}},
       el(
         'div',
         {className: 'sec-head-left'},
-        el('span', {className: 'sec-num'}, '02'),
+        el('span', {className: 'sec-num'}, '03'),
         el('h2', {className: 'section-title'}, t.home.metricsTitle)
       ),
       el(
@@ -1334,14 +1599,7 @@ function renderHomeView() {
                 className: 'muted-xs',
                 style: {display: 'flex', alignItems: 'center', gap: '4px', marginTop: '3px', fontSize: '11px'},
               },
-              createIcon(
-                trend === 'rising'
-                  ? 'arrowUpRight'
-                  : trend === 'falling'
-                    ? 'arrowDownRight'
-                    : 'minus',
-                `sm ${trend === 'rising' ? 'c-emerald' : trend === 'falling' ? 'c-pink' : 'c-sky'}`
-              ),
+              createIcon(trendMeta.icon, trendMeta.cls),
               t.home.pressureTrend[trend]
             )
           )
@@ -1391,6 +1649,7 @@ function renderHomeView() {
         )
       ),
       w.airQuality &&
+        aqiMeta &&
         el(
           'div',
           {className: 'glass-subtle aqi-row'},
@@ -1403,11 +1662,7 @@ function renderHomeView() {
               {className: 'metric-val mono', style: {marginTop: '4px'}},
               String(w.airQuality.europeanAqi),
               ' ',
-              el(
-                'span',
-                {className: getAqiCls(w.airQuality.europeanAqi), style: {fontSize: '14px'}},
-                getAqiLabel(w.airQuality.europeanAqi)
-              )
+              el('span', {className: aqiMeta.cls, style: {fontSize: '14px'}}, aqiMeta.label)
             )
           ),
           el(
@@ -1441,12 +1696,26 @@ function renderHomeView() {
         )
     )
   );
+}
 
-  // Sun trajectory SVG card
+// Карточка дуги солнца и фазы луны
+function buildSunCard(w, today, t) {
+  const sun = today
+    ? computeSunProgress(w.timezone, today.sunrise, today.sunset)
+    : {
+        progress: 0.5,
+        state: 'during',
+        daylightHours: 12,
+        daylightMinutes: 0,
+        goldenEvening: '18:00–18:50',
+      };
+  const moon = computeMoonPhase(Date.now(), state.lang);
+
   const sunT = sun.progress;
   const sunX = (1 - sunT) * (1 - sunT) * 20 + 2 * (1 - sunT) * sunT * 140 + sunT * sunT * 260;
   const sunY = (1 - sunT) * (1 - sunT) * 96 + 2 * (1 - sunT) * sunT * 12 + sunT * sunT * 96;
   const sunDotColor = sun.state === 'during' ? '#fde68a' : 'var(--muted)';
+
   const sunSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   sunSvg.setAttribute('viewBox', '0 0 280 118');
   sunSvg.style.width = '100%';
@@ -1454,7 +1723,7 @@ function renderHomeView() {
   sunSvg.style.overflow = 'visible';
   sunSvg.innerHTML = `<defs><linearGradient id="vSunG" x1="20" y1="96" x2="260" y2="96" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="#fff1f2"/><stop offset="52%" stop-color="#fb7185"/><stop offset="100%" stop-color="#818cf8"/></linearGradient></defs><line x1="12" y1="96" x2="268" y2="96" stroke="var(--line-strong)" stroke-dasharray="4 4"/><path d="M 20 96 Q 140 12 260 96" fill="none" stroke="var(--line)" stroke-width="2.5"/><path d="M 20 96 Q 140 12 260 96" fill="none" stroke="url(#vSunG)" stroke-width="3" stroke-dasharray="300" stroke-dashoffset="${300 - 300 * sunT}" stroke-linecap="round"/><circle cx="${sunX}" cy="${sunY}" r="7" fill="${sunDotColor}" stroke="var(--surface)" stroke-width="2.5"/>`;
 
-  const sunCard = attachSpotlight(
+  return attachSpotlight(
     el(
       'section',
       {
@@ -1541,71 +1810,71 @@ function renderHomeView() {
       )
     )
   );
+}
 
-  stack.appendChild(el('div', {className: 'split-12'}, metricsPanel, sunCard));
-
-  // 03 · 24-hour forecast
-  const next24 = getNext24Hours(w);
-  stack.appendChild(
-    attachSpotlight(
-      el(
-        'section',
-        {className: 'glass-panel card-pad'},
-        el(
-          'div',
-          {className: 'section-head'},
-          el(
-            'div',
-            {className: 'sec-head-left'},
-            el('span', {className: 'sec-num'}, '03'),
-            el('h2', {className: 'section-title'}, t.home.hourlyTitle)
-          ),
-          el('span', {className: 'mono muted-xs'}, `${next24.length}h`)
-        ),
-        createSparkline({
-          title: t.home.hourlySparklineTitle,
-          points: next24.map((h, i) => ({
-            label: i === 0 ? t.home.now : formatIsoTime(h.time),
-            value: convertTempExact(h.temperature, state.unit),
-          })),
-        }),
-        el(
-          'div',
-          {className: 'hourly-strip'},
-          next24.map((h, i) =>
-            el(
-              'div',
-              {className: `hour-pill ${i === 0 ? 'now' : ''}`},
-              el(
-                'span',
-                {className: 'mono muted-xs'},
-                i === 0 ? t.home.now : formatIsoTime(h.time)
-              ),
-              createWeatherIcon(h.weatherCode, h.isDay),
-              el(
-                'span',
-                {className: 'mono', style: {fontWeight: '600', fontSize: '15px'}},
-                formatTemp(h.temperature, state.unit)
-              ),
-              el(
-                'span',
-                {className: 'mono c-sky', style: {fontSize: '11px'}},
-                `${Math.round(h.precipProb)}%`
-              )
-            )
-          )
-        )
-      )
-    )
-  );
-
-  // 04 · 8-day forecast + Map preview
+// Сбор блока 04 · Прогноз на 8 дней
+function buildDaily8Card(w, t) {
   const daily8 = w.daily.slice(0, 8);
-  const wMin = Math.min(...daily8.map((d) => d.tempMin));
-  const wMax = Math.max(...daily8.map((d) => d.tempMax));
+  let wMin = daily8[0]?.tempMin ?? 0;
+  let wMax = daily8[0]?.tempMax ?? 0;
+  for (let i = 1; i < daily8.length; i++) {
+    if (daily8[i].tempMin < wMin) wMin = daily8[i].tempMin;
+    if (daily8[i].tempMax > wMax) wMax = daily8[i].tempMax;
+  }
   const span = Math.max(1, wMax - wMin);
 
-  const dailyCard = attachSpotlight(
+  const sparkPoints = [];
+  const rows = [];
+  for (let i = 0; i < daily8.length; i++) {
+    const d = daily8[i];
+    sparkPoints.push({
+      label: i === 0 ? t.home.today : formatDateLabel(d.date, state.lang, 'short'),
+      value: convertTempExact(d.tempMax, state.unit),
+      secondaryValue: convertTempExact(d.tempMin, state.unit),
+    });
+
+    const left = ((d.tempMin - wMin) / span) * 100;
+    const width = Math.max(8, ((d.tempMax - d.tempMin) / span) * 100);
+    rows.push(
+      el(
+        'div',
+        {className: 'daily-row'},
+        el(
+          'span',
+          {style: {width: '108px', fontWeight: '500'}},
+          i === 0 ? t.home.today : formatDateLabel(d.date, state.lang, 'full')
+        ),
+        el(
+          'span',
+          {style: {display: 'flex', alignItems: 'center', gap: '8px', width: '64px'}},
+          createWeatherIcon(d.weatherCode, true, 'sm'),
+          d.precipProbMax >= 15
+            ? el('span', {className: 'mono c-sky', style: {fontSize: '12px'}}, `${Math.round(d.precipProbMax)}%`)
+            : ''
+        ),
+        el(
+          'span',
+          {
+            className: 'mono',
+            style: {width: '36px', textAlign: 'right', fontSize: '12px', color: 'var(--spark-min)', fontWeight: '500'},
+          },
+          formatTemp(d.tempMin, state.unit)
+        ),
+        el(
+          'div',
+          {className: 'daily-bar-track'},
+          el('div', {className: 'daily-bar-fill', style: {left: `${left}%`, width: `${width}%`}})
+        ),
+        el(
+          'span',
+          {className: 'mono', style: {width: '36px', fontWeight: '600', fontSize: '12px'}},
+          formatTemp(d.tempMax, state.unit)
+        )
+      )
+    );
+  }
+
+  return attachSpotlight(
     el(
       'section',
       {className: 'glass-panel card-pad'},
@@ -1632,60 +1901,17 @@ function renderHomeView() {
           title: t.home.daily8SparklineTitle,
           showSecondary: true,
           height: 76,
-          points: daily8.map((d, i) => ({
-            label: i === 0 ? t.home.today : formatDateLabel(d.date, state.lang, 'short'),
-            value: convertTempExact(d.tempMax, state.unit),
-            secondaryValue: convertTempExact(d.tempMin, state.unit),
-          })),
+          points: sparkPoints,
         })
       ),
-      el(
-        'div',
-        {className: 'daily-list'},
-        daily8.map((d, i) => {
-          const left = ((d.tempMin - wMin) / span) * 100;
-          const width = Math.max(8, ((d.tempMax - d.tempMin) / span) * 100);
-          return el(
-            'div',
-            {className: 'daily-row'},
-            el(
-              'span',
-              {style: {width: '108px', fontWeight: '500'}},
-              i === 0 ? t.home.today : formatDateLabel(d.date, state.lang, 'full')
-            ),
-            el(
-              'span',
-              {style: {display: 'flex', alignItems: 'center', gap: '8px', width: '64px'}},
-              createWeatherIcon(d.weatherCode, true, 'sm'),
-              d.precipProbMax >= 15
-                ? el('span', {className: 'mono c-sky', style: {fontSize: '12px'}}, `${Math.round(d.precipProbMax)}%`)
-                : ''
-            ),
-            el(
-              'span',
-              {
-                className: 'mono',
-                style: {width: '36px', textAlign: 'right', fontSize: '12px', color: 'var(--spark-min)', fontWeight: '500'},
-              },
-              formatTemp(d.tempMin, state.unit)
-            ),
-            el(
-              'div',
-              {className: 'daily-bar-track'},
-              el('div', {className: 'daily-bar-fill', style: {left: `${left}%`, width: `${width}%`}})
-            ),
-            el(
-              'span',
-              {className: 'mono', style: {width: '36px', fontWeight: '600', fontSize: '12px'}},
-              formatTemp(d.tempMax, state.unit)
-            )
-          );
-        })
-      )
+      el('div', {className: 'daily-list'}, rows)
     )
   );
+}
 
-  const mapPreview = attachSpotlight(
+// Карточка превью метеокарты
+function buildMapPreviewCard(w, disp, t) {
+  return attachSpotlight(
     el(
       'section',
       {
@@ -1750,14 +1976,68 @@ function renderHomeView() {
       )
     )
   );
+}
 
-  stack.appendChild(el('div', {className: 'split-12'}, dailyCard, mapPreview));
+// Сборка главного экрана
+function renderHomeView() {
+  const t = TRANSLATIONS[state.lang];
+  const w = state.weather;
+  const disp = getLocalizedCityDisplay(w.city, state.lang);
+  const {dayPhase} = syncAtmosphere();
+  const clock = getCityLocalClock(w.timezone);
+  const today = w.daily[0];
+  const tomorrow = w.daily[1];
+
+  const weekend = [];
+  for (let i = 0; i < w.daily.length && weekend.length < 2; i++) {
+    const d = w.daily[i];
+    const [y, m, day] = d.date.split('-').map(Number);
+    const dow = new Date(Date.UTC(y, m - 1, day, 12)).getUTCDay();
+    if (dow === 0 || dow === 6) {
+      weekend.push(d);
+    }
+  }
+
+  const stack = el('div', {className: 'view-stack'});
+  stack.appendChild(buildHeroSection(w, today, tomorrow, weekend, disp, clock, dayPhase, t));
+
+  const alerts = generateWeatherAlerts(w, state.lang);
+  if (alerts.length > 0) {
+    stack.appendChild(buildAlertsSection(alerts, t));
+  }
+
+  stack.appendChild(buildHourlySection(w, t));
+  stack.appendChild(buildInsightsSection(w, t));
+  stack.appendChild(el('div', {className: 'split-12'}, buildMetricsSection(w, t), buildSunCard(w, today, t)));
+  stack.appendChild(el('div', {className: 'split-12'}, buildDaily8Card(w, t), buildMapPreviewCard(w, disp, t)));
+
   return stack;
 }
 
-/* ============================================================================
- * 16-Day Forecast View
- * ========================================================================== */
+/* === Экран прогноза на 16 дней === */
+
+function formatForecastMetricCell(d, m, t) {
+  switch (m) {
+    case 'temperature':
+      return `${formatTemp(d.tempMax, state.unit)} / ${formatTemp(d.tempMin, state.unit)}`;
+    case 'feelsLike':
+      return `${formatTemp(d.feelsMax, state.unit)} / ${formatTemp(d.feelsMin, state.unit)}`;
+    case 'precipProb':
+      return `${Math.round(d.precipProbMax)}%`;
+    case 'precipSum':
+      return `${d.precipSum.toFixed(1)} ${t.home.units.mm}`;
+    case 'humidity':
+      return `${d.humidityMean}%`;
+    case 'windSpeed':
+      return `${Math.round(d.windMax)} ${t.home.units.kmh}`;
+    case 'pressure':
+      return `${d.pressureMean} ${t.home.units.hpa}`;
+    case 'uvIndex':
+      return d.uvMax.toFixed(1);
+    case 'cloudCover':
+      return `${d.cloudCoverMean}%`;
+  }
+}
 
 function renderForecastView() {
   const t = TRANSLATIONS[state.lang];
@@ -1768,27 +2048,34 @@ function renderForecastView() {
     state.expandedDate = w.daily[0].date;
   }
 
-  const metricCell = (d, m) => {
-    switch (m) {
-      case 'temperature':
-        return `${formatTemp(d.tempMax, state.unit)} / ${formatTemp(d.tempMin, state.unit)}`;
-      case 'feelsLike':
-        return `${formatTemp(d.feelsMax, state.unit)} / ${formatTemp(d.feelsMin, state.unit)}`;
-      case 'precipProb':
-        return `${Math.round(d.precipProbMax)}%`;
-      case 'precipSum':
-        return `${d.precipSum.toFixed(1)} ${t.home.units.mm}`;
-      case 'humidity':
-        return `${d.humidityMean}%`;
-      case 'windSpeed':
-        return `${Math.round(d.windMax)} ${t.home.units.kmh}`;
-      case 'pressure':
-        return `${d.pressureMean} ${t.home.units.hpa}`;
-      case 'uvIndex':
-        return d.uvMax.toFixed(1);
-      case 'cloudCover':
-        return `${d.cloudCoverMean}%`;
+  const sparkPoints = [];
+  for (let i = 0; i < w.daily.length; i++) {
+    const d = w.daily[i];
+    sparkPoints.push({
+      label: i === 0 ? t.home.today : formatDateLabel(d.date, state.lang, 'short'),
+      value: convertTempExact(d.tempMax, state.unit),
+      secondaryValue: convertTempExact(d.tempMin, state.unit),
+    });
+  }
+
+  const toggleMetric = (m) => {
+    if (state.metrics.includes(m)) {
+      if (state.metrics.length <= 1) {
+        state.minHintVisible = true;
+        renderMain();
+        setTimeout(() => {
+          state.minHintVisible = false;
+          if (state.section === 'forecast') renderMain();
+        }, 2400);
+        return;
+      }
+      state.metrics = state.metrics.filter((x) => x !== m);
+    } else {
+      state.metrics = [...state.metrics, m];
     }
+    state.minHintVisible = false;
+    saveSettings();
+    renderMain();
   };
 
   return el(
@@ -1814,11 +2101,7 @@ function renderForecastView() {
           title: t.forecast.sparklineTitle,
           height: 96,
           showSecondary: true,
-          points: w.daily.map((d, i) => ({
-            label: i === 0 ? t.home.today : formatDateLabel(d.date, state.lang, 'short'),
-            value: convertTempExact(d.tempMax, state.unit),
-            secondaryValue: convertTempExact(d.tempMin, state.unit),
-          })),
+          points: sparkPoints,
         })
       )
     ),
@@ -1842,25 +2125,7 @@ function renderForecastView() {
               type: 'button',
               className: `chip-btn ${state.metrics.includes(m) ? 'active' : ''}`,
               'aria-pressed': String(state.metrics.includes(m)),
-              onClick: () => {
-                if (state.metrics.includes(m)) {
-                  if (state.metrics.length <= 1) {
-                    state.minHintVisible = true;
-                    renderMain();
-                    setTimeout(() => {
-                      state.minHintVisible = false;
-                      if (state.section === 'forecast') renderMain();
-                    }, 2400);
-                    return;
-                  }
-                  state.metrics = state.metrics.filter((x) => x !== m);
-                } else {
-                  state.metrics = [...state.metrics, m];
-                }
-                state.minHintVisible = false;
-                saveSettings();
-                renderMain();
-              },
+              onClick: () => toggleMetric(m),
             },
             t.forecast.metrics[m]
           )
@@ -1906,7 +2171,7 @@ function renderForecastView() {
                   el('span', {style: {color: 'var(--text-secondary)'}}, t.wmo[d.weatherCode] ?? '')
                 )
               ),
-              state.metrics.map((m) => el('td', {className: 'mono'}, metricCell(d, m)))
+              state.metrics.map((m) => el('td', {className: 'mono'}, formatForecastMetricCell(d, m, t)))
             )
           )
         )
@@ -1965,7 +2230,7 @@ function renderForecastView() {
                   'div',
                   {className: 'm-day-chip'},
                   el('span', {className: 'muted-xs', style: {fontSize: '11px'}}, t.forecast.metrics[m]),
-                  el('span', {className: 'mono', style: {fontSize: '12px', fontWeight: '500'}}, metricCell(d, m))
+                  el('span', {className: 'mono', style: {fontSize: '12px', fontWeight: '500'}}, formatForecastMetricCell(d, m, t))
                 )
               )
             )
@@ -1976,10 +2241,10 @@ function renderForecastView() {
               {className: 'm-day-details'},
               el('div', {}, el('div', {className: 'muted-xs'}, t.forecast.sunriseLabel), el('div', {className: 'mono', style: {marginTop: '2px'}}, formatIsoTime(d.sunrise))),
               el('div', {}, el('div', {className: 'muted-xs'}, t.forecast.sunsetLabel), el('div', {className: 'mono', style: {marginTop: '2px'}}, formatIsoTime(d.sunset))),
-              el('div', {}, el('div', {className: 'muted-xs'}, t.forecast.metrics.feelsLike), el('div', {className: 'mono', style: {marginTop: '2px'}}, metricCell(d, 'feelsLike'))),
-              el('div', {}, el('div', {className: 'muted-xs'}, t.forecast.metrics.pressure), el('div', {className: 'mono', style: {marginTop: '2px'}}, metricCell(d, 'pressure'))),
-              el('div', {}, el('div', {className: 'muted-xs'}, t.forecast.metrics.uvIndex), el('div', {className: 'mono', style: {marginTop: '2px'}}, metricCell(d, 'uvIndex'))),
-              el('div', {}, el('div', {className: 'muted-xs'}, t.forecast.metrics.cloudCover), el('div', {className: 'mono', style: {marginTop: '2px'}}, metricCell(d, 'cloudCover')))
+              el('div', {}, el('div', {className: 'muted-xs'}, t.forecast.metrics.feelsLike), el('div', {className: 'mono', style: {marginTop: '2px'}}, formatForecastMetricCell(d, 'feelsLike', t))),
+              el('div', {}, el('div', {className: 'muted-xs'}, t.forecast.metrics.pressure), el('div', {className: 'mono', style: {marginTop: '2px'}}, formatForecastMetricCell(d, 'pressure', t))),
+              el('div', {}, el('div', {className: 'muted-xs'}, t.forecast.metrics.uvIndex), el('div', {className: 'mono', style: {marginTop: '2px'}}, formatForecastMetricCell(d, 'uvIndex', t))),
+              el('div', {}, el('div', {className: 'muted-xs'}, t.forecast.metrics.cloudCover), el('div', {className: 'mono', style: {marginTop: '2px'}}, formatForecastMetricCell(d, 'cloudCover', t)))
             )
         );
       })
@@ -1987,9 +2252,258 @@ function renderForecastView() {
   );
 }
 
-/* ============================================================================
- * Favorites & Comparison View
- * ========================================================================== */
+/* === Экран избранного и сравнения городов === */
+
+function buildCompareSection(t) {
+  const pair = [];
+  for (let i = 0; i < state.compareIds.length; i++) {
+    const id = state.compareIds[i];
+    const city = state.favorites.find((c) => c.id === id);
+    const weather = state.favWeatherMap[id];
+    if (city && weather) {
+      pair.push({city, weather});
+    }
+  }
+
+  return el(
+    'section',
+    {className: 'glass-panel card-pad', style: {borderColor: 'rgba(251,113,133,0.45)'}},
+    el(
+      'div',
+      {className: 'row-between mb-md'},
+      el('strong', {}, pair.length === 2 ? t.favorites.compareTitle : t.favorites.compareSelectHint),
+      state.compareIds.length > 0 &&
+        el(
+          'button',
+          {
+            type: 'button',
+            className: 'c-pink',
+            onClick: () => {
+              state.compareIds = [];
+              renderMain();
+            },
+          },
+          t.favorites.clearCompare
+        )
+    ),
+    pair.length === 2 &&
+      el(
+        'div',
+        {className: 'grid-2'},
+        pair.map(({city, weather}) => {
+          const disp = getLocalizedCityDisplay(city, state.lang);
+          const clk = getCityLocalClock(weather.timezone);
+          return el(
+            'div',
+            {className: 'glass-subtle metric-box'},
+            el(
+              'div',
+              {className: 'row-between'},
+              el(
+                'div',
+                {},
+                el('strong', {style: {fontSize: '18px'}}, disp.name),
+                el('div', {className: 'muted-xs'}, `${disp.country} · ${clk.formattedTime}`)
+              ),
+              el(
+                'div',
+                {className: 'aer-grad-text mono', style: {fontSize: '24px', fontWeight: '700'}},
+                formatTemp(weather.current.temperature, state.unit)
+              )
+            ),
+            el(
+              'div',
+              {className: 'mono muted-xs'},
+              `${t.home.metrics.wind}: ${Math.round(weather.current.windSpeed)} ${t.home.units.kmh} · ${t.home.metrics.humidity}: ${Math.round(weather.current.humidity)}% · ${t.home.metrics.pressure}: ${Math.round(weather.current.pressure)} ${t.home.units.hpa}`
+            )
+          );
+        })
+      )
+  );
+}
+
+function buildEmptyFavoritesSection(t) {
+  return el(
+    'section',
+    {className: 'glass-panel card-pad'},
+    el('h2', {className: 'section-title'}, t.favorites.emptyTitle),
+    el('p', {className: 'muted-sub mb-md'}, t.favorites.emptyDesc),
+    el(
+      'div',
+      {className: 'pill-group'},
+      DEFAULT_CITIES.map((c) =>
+        el(
+          'button',
+          {
+            type: 'button',
+            className: 'btn-subtle',
+            onClick: () => {
+              state.favorites.unshift(c);
+              saveFavorites();
+              renderChrome();
+              renderMain();
+            },
+          },
+          `+ ${getLocalizedCityDisplay(c, state.lang).name}`
+        )
+      )
+    )
+  );
+}
+
+function buildFavoriteCard(city, idx, t) {
+  const disp = getLocalizedCityDisplay(city, state.lang);
+  const w = state.favWeatherMap[city.id];
+  const phase = w
+    ? computeDayPhase(w.timezone, w.daily[0]?.sunrise, w.daily[0]?.sunset)
+    : 'night';
+  const clk = w ? getCityLocalClock(w.timezone) : null;
+  const compared = state.compareIds.includes(city.id);
+
+  const toggleCompare = () => {
+    if (compared) {
+      state.compareIds = state.compareIds.filter((x) => x !== city.id);
+    } else if (state.compareIds.length >= 2) {
+      state.compareIds = [state.compareIds[1], city.id];
+    } else {
+      state.compareIds = [...state.compareIds, city.id];
+    }
+    renderMain();
+  };
+
+  return attachSpotlight(
+    el(
+      'article',
+      {
+        className: 'glass-panel aer-top-accent fav-card',
+        style: compared ? {borderColor: 'var(--pink)'} : {},
+      },
+      el(
+        'div',
+        {className: 'row-between', style: {alignItems: 'flex-start'}},
+        el(
+          'div',
+          {},
+          el(
+            'div',
+            {className: 'mono muted-xs'},
+            clk ? `${clk.formattedTime} · ${t.dayPhases[phase]}` : t.dayPhases[phase]
+          ),
+          el('h2', {className: 'section-title', style: {marginTop: '4px'}}, disp.name),
+          el('div', {className: 'muted-xs'}, [disp.admin1, disp.country].filter(Boolean).join(' · '))
+        ),
+        w
+          ? el(
+              'div',
+              {style: {display: 'flex', alignItems: 'center', gap: '10px'}},
+              createWeatherIcon(w.current.weatherCode, w.current.isDay, 'lg'),
+              el(
+                'div',
+                {style: {textAlign: 'right'}},
+                el(
+                  'div',
+                  {className: 'aer-grad-text mono', style: {fontSize: '24px', fontWeight: '700'}},
+                  formatTemp(w.current.temperature, state.unit)
+                ),
+                el(
+                  'div',
+                  {className: 'muted-xs mono'},
+                  `${formatTemp(w.daily[0]?.tempMax ?? w.current.temperature, state.unit)} / ${formatTemp(w.daily[0]?.tempMin ?? w.current.temperature, state.unit)}`
+                )
+              )
+            )
+          : el('span', {className: 'muted-xs'}, t.favorites.loadingWeather)
+      ),
+      w && el('div', {className: 'muted-xs'}, t.wmo[w.current.weatherCode] ?? ''),
+      el(
+        'div',
+        {className: 'fav-actions'},
+        state.compareMode
+          ? el(
+              'button',
+              {
+                type: 'button',
+                className: compared ? 'btn-primary' : 'btn-subtle',
+                onClick: toggleCompare,
+              },
+              t.favorites.compareToggle
+            )
+          : el(
+              'div',
+              {style: {display: 'flex', gap: '8px'}},
+              el(
+                'button',
+                {
+                  type: 'button',
+                  className: 'btn-primary',
+                  onClick: () => {
+                    selectCity(city);
+                    navigate('home');
+                  },
+                },
+                t.favorites.openCity
+              ),
+              el(
+                'button',
+                {
+                  type: 'button',
+                  className: 'btn-subtle',
+                  onClick: () => {
+                    selectCity(city);
+                    navigate('map');
+                  },
+                },
+                t.favorites.showOnMap
+              )
+            ),
+        el(
+          'div',
+          {style: {display: 'flex', gap: '4px'}},
+          el(
+            'button',
+            {
+              type: 'button',
+              className: 'btn-icon',
+              style: {width: '30px', height: '30px'},
+              disabled: idx === 0,
+              'aria-label': t.favorites.moveUp,
+              onClick: () => moveFav(idx, -1),
+            },
+            createIcon('arrowUp', 'sm')
+          ),
+          el(
+            'button',
+            {
+              type: 'button',
+              className: 'btn-icon',
+              style: {width: '30px', height: '30px'},
+              disabled: idx === state.favorites.length - 1,
+              'aria-label': t.favorites.moveDown,
+              onClick: () => moveFav(idx, 1),
+            },
+            createIcon('arrowDown', 'sm')
+          ),
+          el(
+            'button',
+            {
+              type: 'button',
+              className: 'btn-icon',
+              style: {width: '30px', height: '30px'},
+              'aria-label': t.favorites.removeCity,
+              onClick: () => {
+                state.favorites = state.favorites.filter((f) => !sameCity(f, city));
+                saveFavorites();
+                renderChrome();
+                renderMain();
+              },
+            },
+            createIcon('trash', 'sm c-pink')
+          )
+        )
+      )
+    )
+  );
+}
 
 function renderFavoritesView() {
   const t = TRANSLATIONS[state.lang];
@@ -2034,283 +2548,39 @@ function renderFavoritesView() {
     )
   );
 
-  // Lazy-load weather for saved cities
-  state.favorites.forEach((fav) => {
+  // Подгружаем погоду для избранных городов в фоне
+  for (let i = 0; i < state.favorites.length; i++) {
+    const fav = state.favorites[i];
     if (!state.favWeatherMap[fav.id]) {
       const cached = getCachedWeather(fav);
       if (cached) state.favWeatherMap[fav.id] = cached;
-      void fetchCityWeather(fav)
+      fetchCityWeather(fav)
         .then((data) => {
           state.favWeatherMap[fav.id] = data;
           if (state.section === 'favorites') renderMain();
         })
         .catch(() => {});
     }
-  });
+  }
 
   if (state.compareMode) {
-    const pair = state.compareIds
-      .map((id) => ({
-        city: state.favorites.find((c) => c.id === id),
-        weather: state.favWeatherMap[id],
-      }))
-      .filter((x) => x.city && x.weather);
-
-    stack.appendChild(
-      el(
-        'section',
-        {className: 'glass-panel card-pad', style: {borderColor: 'rgba(251,113,133,0.45)'}},
-        el(
-          'div',
-          {className: 'row-between mb-md'},
-          el('strong', {}, pair.length === 2 ? t.favorites.compareTitle : t.favorites.compareSelectHint),
-          state.compareIds.length > 0 &&
-            el(
-              'button',
-              {
-                type: 'button',
-                className: 'c-pink',
-                onClick: () => {
-                  state.compareIds = [];
-                  renderMain();
-                },
-              },
-              t.favorites.clearCompare
-            )
-        ),
-        pair.length === 2 &&
-          el(
-            'div',
-            {className: 'grid-2'},
-            pair.map(({city, weather}) => {
-              const disp = getLocalizedCityDisplay(city, state.lang);
-              const clk = getCityLocalClock(weather.timezone);
-              return el(
-                'div',
-                {className: 'glass-subtle metric-box'},
-                el(
-                  'div',
-                  {className: 'row-between'},
-                  el(
-                    'div',
-                    {},
-                    el('strong', {style: {fontSize: '18px'}}, disp.name),
-                    el('div', {className: 'muted-xs'}, `${disp.country} · ${clk.formattedTime}`)
-                  ),
-                  el(
-                    'div',
-                    {className: 'aer-grad-text mono', style: {fontSize: '24px', fontWeight: '700'}},
-                    formatTemp(weather.current.temperature, state.unit)
-                  )
-                ),
-                el(
-                  'div',
-                  {className: 'mono muted-xs'},
-                  `${t.home.metrics.wind}: ${Math.round(weather.current.windSpeed)} ${t.home.units.kmh} · ${t.home.metrics.humidity}: ${Math.round(weather.current.humidity)}% · ${t.home.metrics.pressure}: ${Math.round(weather.current.pressure)} ${t.home.units.hpa}`
-                )
-              );
-            })
-          )
-      )
-    );
+    stack.appendChild(buildCompareSection(t));
   }
 
   if (state.favorites.length === 0) {
-    stack.appendChild(
-      el(
-        'section',
-        {className: 'glass-panel card-pad'},
-        el('h2', {className: 'section-title'}, t.favorites.emptyTitle),
-        el('p', {className: 'muted-sub mb-md'}, t.favorites.emptyDesc),
-        el(
-          'div',
-          {className: 'pill-group'},
-          DEFAULT_CITIES.map((c) =>
-            el(
-              'button',
-              {
-                type: 'button',
-                className: 'btn-subtle',
-                onClick: () => {
-                  state.favorites.unshift(c);
-                  saveFavorites();
-                  renderChrome();
-                  renderMain();
-                },
-              },
-              `+ ${getLocalizedCityDisplay(c, state.lang).name}`
-            )
-          )
-        )
-      )
-    );
+    stack.appendChild(buildEmptyFavoritesSection(t));
     return stack;
   }
 
-  stack.appendChild(
-    el(
-      'div',
-      {className: 'fav-grid'},
-      state.favorites.map((city, idx) => {
-        const disp = getLocalizedCityDisplay(city, state.lang);
-        const w = state.favWeatherMap[city.id];
-        const phase = w
-          ? computeDayPhase(w.timezone, w.daily[0]?.sunrise, w.daily[0]?.sunset)
-          : 'night';
-        const clk = w ? getCityLocalClock(w.timezone) : null;
-        const compared = state.compareIds.includes(city.id);
-
-        return attachSpotlight(
-          el(
-            'article',
-            {
-              className: 'glass-panel aer-top-accent fav-card',
-              style: compared ? {borderColor: 'var(--pink)'} : {},
-            },
-            el(
-              'div',
-              {className: 'row-between', style: {alignItems: 'flex-start'}},
-              el(
-                'div',
-                {},
-                el(
-                  'div',
-                  {className: 'mono muted-xs'},
-                  clk ? `${clk.formattedTime} · ${t.dayPhases[phase]}` : t.dayPhases[phase]
-                ),
-                el('h2', {className: 'section-title', style: {marginTop: '4px'}}, disp.name),
-                el('div', {className: 'muted-xs'}, [disp.admin1, disp.country].filter(Boolean).join(' · '))
-              ),
-              w
-                ? el(
-                    'div',
-                    {style: {display: 'flex', alignItems: 'center', gap: '10px'}},
-                    createWeatherIcon(w.current.weatherCode, w.current.isDay, 'lg'),
-                    el(
-                      'div',
-                      {style: {textAlign: 'right'}},
-                      el(
-                        'div',
-                        {className: 'aer-grad-text mono', style: {fontSize: '24px', fontWeight: '700'}},
-                        formatTemp(w.current.temperature, state.unit)
-                      ),
-                      el(
-                        'div',
-                        {className: 'muted-xs mono'},
-                        `${formatTemp(w.daily[0]?.tempMax ?? w.current.temperature, state.unit)} / ${formatTemp(w.daily[0]?.tempMin ?? w.current.temperature, state.unit)}`
-                      )
-                    )
-                  )
-                : el('span', {className: 'muted-xs'}, t.favorites.loadingWeather)
-            ),
-            w && el('div', {className: 'muted-xs'}, t.wmo[w.current.weatherCode] ?? ''),
-            el(
-              'div',
-              {className: 'fav-actions'},
-              state.compareMode
-                ? el(
-                    'button',
-                    {
-                      type: 'button',
-                      className: compared ? 'btn-primary' : 'btn-subtle',
-                      onClick: () => {
-                        if (compared) {
-                          state.compareIds = state.compareIds.filter((x) => x !== city.id);
-                        } else {
-                          state.compareIds =
-                            state.compareIds.length >= 2
-                              ? [state.compareIds[1], city.id]
-                              : [...state.compareIds, city.id];
-                        }
-                        renderMain();
-                      },
-                    },
-                    t.favorites.compareToggle
-                  )
-                : el(
-                    'div',
-                    {style: {display: 'flex', gap: '8px'}},
-                    el(
-                      'button',
-                      {
-                        type: 'button',
-                        className: 'btn-primary',
-                        onClick: () => {
-                          selectCity(city);
-                          navigate('home');
-                        },
-                      },
-                      t.favorites.openCity
-                    ),
-                    el(
-                      'button',
-                      {
-                        type: 'button',
-                        className: 'btn-subtle',
-                        onClick: () => {
-                          selectCity(city);
-                          navigate('map');
-                        },
-                      },
-                      t.favorites.showOnMap
-                    )
-                  ),
-              el(
-                'div',
-                {style: {display: 'flex', gap: '4px'}},
-                el(
-                  'button',
-                  {
-                    type: 'button',
-                    className: 'btn-icon',
-                    style: {width: '30px', height: '30px'},
-                    disabled: idx === 0,
-                    'aria-label': t.favorites.moveUp,
-                    onClick: () => moveFav(idx, -1),
-                  },
-                  createIcon('arrowUp', 'sm')
-                ),
-                el(
-                  'button',
-                  {
-                    type: 'button',
-                    className: 'btn-icon',
-                    style: {width: '30px', height: '30px'},
-                    disabled: idx === state.favorites.length - 1,
-                    'aria-label': t.favorites.moveDown,
-                    onClick: () => moveFav(idx, 1),
-                  },
-                  createIcon('arrowDown', 'sm')
-                ),
-                el(
-                  'button',
-                  {
-                    type: 'button',
-                    className: 'btn-icon',
-                    style: {width: '30px', height: '30px'},
-                    'aria-label': t.favorites.removeCity,
-                    onClick: () => {
-                      state.favorites = state.favorites.filter((f) => !sameCity(f, city));
-                      saveFavorites();
-                      renderChrome();
-                      renderMain();
-                    },
-                  },
-                  createIcon('trash', 'sm c-pink')
-                )
-              )
-            )
-          )
-        );
-      })
-    )
-  );
+  const cards = [];
+  for (let i = 0; i < state.favorites.length; i++) {
+    cards.push(buildFavoriteCard(state.favorites[i], i, t));
+  }
+  stack.appendChild(el('div', {className: 'fav-grid'}, cards));
   return stack;
 }
 
-/* ============================================================================
- * Main View Orchestration, Footer & State Actions
- * ========================================================================== */
+/* === Отрисовка разделов, футера и действия пользователя === */
 
 function renderMain() {
   activeMapController?.destroy();
@@ -2361,7 +2631,7 @@ function renderMain() {
       setChildren(refs.main, activeMapController.el);
     }
   } catch (err) {
-    console.error('AER.wave render error:', err);
+    console.error('Ошибка отрисовки AER.wave:', err);
     setChildren(
       refs.main,
       el(
@@ -2422,7 +2692,7 @@ function toggleTheme() {
 function setLang(code) {
   state.lang = code;
   saveSettings();
-  void resolveAllLocalizations();
+  resolveAllLocalizations();
   renderChrome();
   renderMain();
 }
@@ -2474,30 +2744,42 @@ function selectCity(city) {
   loadCity(city);
 }
 
+// Перевод названий активного и избранных городов при смене языка
 async function resolveAllLocalizations() {
   const lang = state.lang;
   if (hasIncompleteLocalization(state.city.localized?.[lang], lang)) {
     const updated = await resolveCityLocalization(state.city, lang).catch(() => null);
     if (updated?.localized?.[lang] && sameCity(state.city, updated)) {
-      state.city = {...state.city, countryCode: updated.countryCode ?? state.city.countryCode, localized: {...state.city.localized, ...updated.localized}};
+      state.city = {
+        ...state.city,
+        countryCode: updated.countryCode ?? state.city.countryCode,
+        localized: {...state.city.localized, ...updated.localized},
+      };
       if (state.weather) state.weather.city = state.city;
       saveSettings();
       renderChrome();
       renderMain();
     }
   }
-  await Promise.allSettled(
-    state.favorites.map(async (f, i) => {
-      if (!hasIncompleteLocalization(f.localized?.[lang], lang)) return;
+
+  for (let i = 0; i < state.favorites.length; i++) {
+    const f = state.favorites[i];
+    if (!hasIncompleteLocalization(f.localized?.[lang], lang)) continue;
+    try {
       const u = await resolveCityLocalization(f, lang);
-      if (u.localized?.[lang]) state.favorites[i] = u;
-    })
-  );
+      if (u.localized?.[lang]) {
+        state.favorites[i] = u;
+      }
+    } catch {
+      // Игнорируем ошибку отдельного города
+    }
+  }
   saveFavorites();
   if (state.section === 'favorites') renderMain();
 }
 
-function loadCity(city) {
+// Загрузка погоды и панорамы выбранного города
+async function loadCity(city) {
   weatherAbort?.abort();
   weatherAbort = new AbortController();
   const signal = weatherAbort.signal;
@@ -2509,30 +2791,30 @@ function loadCity(city) {
   renderChrome();
   renderMain();
 
-  void Promise.allSettled([
+  const [wRes, imgRes] = await Promise.allSettled([
     fetchCityWeather(city, signal),
     fetchCityPanorama(city, signal),
-  ]).then(([wRes, imgRes]) => {
-    if (signal.aborted) return;
-    if (wRes.status === 'fulfilled') {
-      state.weather = wRes.value;
-      state.loadError = false;
-    } else {
-      const fb = getCachedWeather(city);
-      state.weather = fb;
-      state.loadError = !fb;
-    }
-    state.cityImage = imgRes.status === 'fulfilled' ? imgRes.value : null;
-    state.isLoading = false;
-    renderChrome();
-    renderMain();
-    void resolveAllLocalizations();
-  });
+  ]);
+
+  if (signal.aborted) return;
+
+  if (wRes.status === 'fulfilled') {
+    state.weather = wRes.value;
+    state.loadError = false;
+  } else {
+    const fb = getCachedWeather(city);
+    state.weather = fb;
+    state.loadError = !fb;
+  }
+
+  state.cityImage = imgRes.status === 'fulfilled' ? imgRes.value : null;
+  state.isLoading = false;
+  renderChrome();
+  renderMain();
+  resolveAllLocalizations();
 }
 
-/* ============================================================================
- * Global Listeners & Application Boot
- * ========================================================================== */
+/* === Глобальные слушатели и запуск приложения === */
 
 window.addEventListener(
   'pointermove',
@@ -2594,3 +2876,4 @@ if ('serviceWorker' in navigator) {
 
 initMagneticButtons();
 loadCity(state.city);
+if (isFirstVisit) showCityOnboardingModal();
