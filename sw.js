@@ -1,5 +1,5 @@
 // Кэш и список файлов для работы офлайн
-const CACHE_NAME = 'aerwave-vanilla-v7-12';
+const CACHE_NAME = 'aerwave-vanilla-v7-16';
 const STATIC_ASSETS = [
   './',
   './index.html',

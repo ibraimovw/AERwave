@@ -1,5 +1,5 @@
 // Ключи для хранения кэша в localStorage
-const WEATHER_CACHE_KEY = 'aerwave_vanilla_weather_v7';
+const WEATHER_CACHE_KEY = 'aerwave_vanilla_weather_v8';
 const CITY_I18N_KEY = 'aerwave_vanilla_city_i18n_v7';
 const PANORAMA_KEY = 'aerwave_vanilla_panoramas_v7';
 const PANORAMA_MEM = new Map();
@@ -411,6 +411,7 @@ export async function fetchCityWeather(city, signal) {
     'weather_code,temperature_2m_max,temperature_2m_min,apparent_temperature_max,apparent_temperature_min,sunrise,sunset,uv_index_max,precipitation_sum,precipitation_probability_max,wind_speed_10m_max'
   );
   url.searchParams.set('forecast_days', '16');
+  url.searchParams.set('wind_speed_unit', 'ms');
   url.searchParams.set('timezone', 'auto');
 
   const [res, airQuality] = await Promise.all([fetch(url.toString(), {signal}), fetchAirQuality(city, signal)]);
@@ -527,6 +528,7 @@ export async function fetchMapGrid(bounds, signal) {
   url.searchParams.set('latitude', coords.map((p) => p.lat.toFixed(3)).join(','));
   url.searchParams.set('longitude', coords.map((p) => p.lon.toFixed(3)).join(','));
   url.searchParams.set('current', 'temperature_2m,precipitation,wind_speed_10m,cloud_cover');
+  url.searchParams.set('wind_speed_unit', 'ms');
 
   const res = await fetch(url.toString(), {signal});
   if (!res.ok) throw new Error(`Map grid error: ${res.status}`);

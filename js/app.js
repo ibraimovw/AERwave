@@ -76,7 +76,7 @@ function loadSettings() {
         unit: p.unit === 'F' ? 'F' : 'C',
         theme: p.theme === 'light' ? 'light' : 'dark',
         city: p.city?.latitude ? p.city : DEFAULT_STARTER_CITY,
-        sidebarCollapsed: Boolean(p.sidebarCollapsed),
+        sidebarPinned: Boolean(p.sidebarPinned),
         metrics: Array.isArray(p.metrics) && p.metrics.length ? p.metrics : DEFAULT_METRICS,
       };
     }
@@ -88,7 +88,7 @@ function loadSettings() {
     unit: 'C',
     theme: 'dark',
     city: DEFAULT_STARTER_CITY,
-    sidebarCollapsed: false,
+    sidebarPinned: false,
     metrics: DEFAULT_METRICS,
   };
 }
@@ -140,7 +140,7 @@ const state = {
   unit: initial.unit,
   theme: initial.theme,
   city: initial.city,
-  sidebarCollapsed: initial.sidebarCollapsed,
+  sidebarPinned: initial.sidebarPinned,
   metrics: initial.metrics,
   favorites: loadFavorites(),
   section: 'home',
@@ -183,6 +183,8 @@ let activeMapController = null;
 let weatherAbort = null;
 let searchAbort = null;
 let lockedScrollY = 0;
+let sidebarHovered = false;
+let sidebarSuppressHover = false;
 
 function saveSettings() {
   try {
@@ -193,7 +195,7 @@ function saveSettings() {
         unit: state.unit,
         theme: state.theme,
         city: state.city,
-        sidebarCollapsed: state.sidebarCollapsed,
+        sidebarPinned: state.sidebarPinned,
         metrics: state.metrics,
       })
     );
@@ -222,14 +224,14 @@ function syncAtmosphere() {
 
   document.documentElement.lang = state.lang;
   document.body.classList.toggle('light-theme', state.theme === 'light');
-  document.body.classList.toggle('sidebar-collapsed', state.sidebarCollapsed);
+  document.body.classList.toggle('sidebar-pinned', state.sidebarPinned);
   document.body.setAttribute('data-dayphase', dayPhase);
   document.body.setAttribute('data-weather', mood);
 
   canvasEngine.update({
     mood,
     dayPhase,
-    windSpeed: state.weather?.current.windSpeed ?? 6,
+    windSpeed: state.weather?.current.windSpeed ?? 2,
     theme: state.theme,
   });
 
@@ -281,14 +283,15 @@ function makeInstallButton(compact = false, extraClass = '') {
   };
 
   const isTopbar = extraClass.includes('topbar-install-btn');
+  const isSidebar = extraClass.includes('sidebar-install-btn');
   const labelText = isTopbar ? t.pwa.downloadShort : t.pwa.installShort;
   const baseClass = state.deferredPrompt || isTopbar ? 'btn-primary' : 'btn-subtle';
   const iconClass = state.deferredPrompt || isTopbar ? 'sm' : 'sm c-pink';
 
   let btnStyle;
-  if (compact) {
+  if (compact && !isSidebar) {
     btnStyle = {width: '40px', height: '40px', padding: '0'};
-  } else if (!isTopbar) {
+  } else if (!isTopbar && !isSidebar) {
     btnStyle = {width: '100%'};
   }
 
@@ -302,8 +305,11 @@ function makeInstallButton(compact = false, extraClass = '') {
       'aria-label': t.pwa.installBtn,
       onClick: triggerInstall,
     },
-    createIcon('download', iconClass),
-    !compact && el('span', {}, labelText)
+    isSidebar
+      ? el('span', {className: 'sidebar-install-icon'}, createIcon('download', iconClass))
+      : createIcon('download', iconClass),
+    (!compact || isSidebar) &&
+      el('span', {className: isSidebar ? 'sidebar-label' : ''}, labelText)
   );
 }
 
@@ -531,10 +537,23 @@ function showCityOnboardingModal() {
 
 /* === Навигация: боковое меню, верхняя панель, док, шторка, футер === */
 
+function syncSidebarVisual() {
+  if (!refs.sidebar) return;
+  const isExpanded = state.sidebarPinned || (sidebarHovered && !sidebarSuppressHover);
+  refs.sidebar.classList.toggle('collapsed', !isExpanded);
+  refs.sidebar.classList.toggle('hover-expanded', isExpanded && !state.sidebarPinned);
+  document.body.classList.toggle('sidebar-pinned', state.sidebarPinned);
+  const brandBtn = refs.sidebar.querySelector('.brand-btn');
+  if (brandBtn) {
+    const t = TRANSLATIONS[state.lang];
+    brandBtn.setAttribute('aria-expanded', String(isExpanded));
+    brandBtn.setAttribute('title', isExpanded ? t.nav.collapseSidebar : t.nav.expandSidebar);
+  }
+}
+
 function renderSidebar() {
   const t = TRANSLATIONS[state.lang];
-  const collapsed = state.sidebarCollapsed;
-  refs.sidebar.classList.toggle('collapsed', collapsed);
+  const isExpanded = state.sidebarPinned || (sidebarHovered && !sidebarSuppressHover);
 
   const navItems = [
     {id: 'home', label: t.nav.home, icon: 'home'},
@@ -543,66 +562,52 @@ function renderSidebar() {
     {id: 'favorites', label: t.nav.favorites, icon: 'star', count: state.favorites.length},
   ];
 
-  const installBtn = makeInstallButton(collapsed);
+  const installBtn = makeInstallButton(false, 'sidebar-install-btn');
 
   setChildren(
     refs.sidebar,
-    el('div', {className: 'sidebar-top-edge', 'aria-hidden': 'true'}),
     el(
       'div',
       {className: 'sidebar-head'},
       el(
         'button',
-        {type: 'button', className: 'brand-btn', onClick: () => navigate('home')},
-        el('img', {src: './assets/logo.svg', alt: t.brandName, className: 'brand-logo'}),
-        !collapsed &&
-          el(
-            'div',
-            {style: {minWidth: '0'}},
-            el(
-              'div',
-              {className: 'brand-lockup'},
-              el('span', {className: 'aer-brand-mark'}, 'AER'),
-              el('span', {className: 'brand-lockup-wave'}, '.wave')
-            ),
-            el('div', {className: 'brand-slogan'}, t.slogan)
-          )
-      ),
-      !collapsed &&
-        el(
-          'button',
-          {
-            type: 'button',
-            className: 'sidebar-toggle-btn',
-            'aria-label': t.nav.collapseSidebar,
-            title: t.nav.collapseSidebar,
-            onClick: () => {
-              state.sidebarCollapsed = true;
-              saveSettings();
-              syncAtmosphere();
-              renderSidebar();
-            },
-          },
-          createIcon('collapse', 'sm')
-        )
-    ),
-    collapsed &&
-      el(
-        'button',
         {
           type: 'button',
-          className: 'sidebar-toggle-btn expanded-handle',
-          'aria-label': t.nav.expandSidebar,
-          title: t.nav.expandSidebar,
+          className: 'brand-btn',
+          'aria-expanded': String(isExpanded),
+          title: isExpanded ? t.nav.collapseSidebar : t.nav.expandSidebar,
           onClick: () => {
-            state.sidebarCollapsed = false;
+            const currentlyOpen = state.sidebarPinned || (sidebarHovered && !sidebarSuppressHover);
+            if (currentlyOpen) {
+              state.sidebarPinned = false;
+              sidebarHovered = false;
+              sidebarSuppressHover = true;
+            } else {
+              state.sidebarPinned = true;
+              sidebarSuppressHover = false;
+            }
             saveSettings();
-            syncAtmosphere();
-            renderSidebar();
+            syncSidebarVisual();
           },
         },
-        createIcon('expand', 'sm')
-      ),
+        el(
+          'span',
+          {className: 'brand-logo-slot'},
+          el('img', {src: './assets/logo.svg', alt: t.brandName, className: 'brand-logo'})
+        ),
+        el(
+          'div',
+          {className: 'sidebar-brand-info'},
+          el(
+            'div',
+            {className: 'brand-lockup'},
+            el('span', {className: 'aer-brand-mark'}, 'AER'),
+            el('span', {className: 'brand-lockup-wave'}, '.wave')
+          ),
+          el('div', {className: 'brand-slogan'}, t.slogan)
+        )
+      )
+    ),
     el(
       'nav',
       {className: 'sidebar-nav'},
@@ -612,18 +617,21 @@ function renderSidebar() {
           {
             type: 'button',
             className: `nav-btn ${state.section === item.id ? 'active' : ''}`,
-            title: collapsed ? item.label : undefined,
+            title: item.label,
             onClick: () => navigate(item.id),
           },
           el(
             'span',
-            {className: 'nav-left'},
-            createIcon(item.icon, state.section === item.id ? 'c-pink' : ''),
-            !collapsed && el('span', {}, item.label)
+            {className: 'nav-icon-slot'},
+            createIcon(item.icon, state.section === item.id ? 'c-pink' : '')
           ),
-          !collapsed &&
+          el(
+            'span',
+            {className: 'nav-right-slot'},
+            el('span', {className: 'sidebar-label'}, item.label),
             typeof item.count === 'number' &&
-            el('span', {className: 'mono muted-xs'}, String(item.count))
+              el('span', {className: 'mono muted-xs nav-count'}, String(item.count))
+          )
         )
       )
     ),
@@ -634,11 +642,12 @@ function renderSidebar() {
       el(
         'div',
         {className: 'version-row'},
-        !collapsed && el('span', {className: 'version-brand'}, t.brandName),
-        el('span', {className: 'mono c-pink', style: {fontWeight: '600'}}, collapsed ? 'v7' : t.version)
+        el('span', {className: 'mono c-pink version-num-slot'}, t.version),
+        el('span', {className: 'version-brand'}, t.brandName)
       )
     )
   );
+  syncSidebarVisual();
 }
 
 function renderTopBar() {
@@ -797,7 +806,17 @@ function renderTopBar() {
     el(
       'div',
       {className: 'topbar-left'},
-      el('img', {src: './assets/logo.svg', alt: t.brandName, className: 'mobile-logo'}),
+      el(
+        'button',
+        {type: 'button', className: 'topbar-brand', onClick: () => navigate('home')},
+        el('img', {src: './assets/logo.svg', alt: t.brandName, className: 'topbar-brand-logo'}),
+        el(
+          'span',
+          {className: 'topbar-brand-text'},
+          el('span', {className: 'aer-brand-mark'}, 'AER'),
+          el('span', {className: 'topbar-brand-wave'}, '.wave')
+        )
+      ),
       el(
         'div',
         {className: 'search-wrap'},
@@ -1257,7 +1276,7 @@ function buildHeroSection(w, today, tomorrow, weekend, disp, clock, dayPhase, t)
           `${formatTemp(tomorrow.tempMax, state.unit)} / ${formatTemp(tomorrow.tempMin, state.unit)}`
         ),
         el('span', {}, `${Math.round(tomorrow.precipProbMax)}%`),
-        el('span', {}, `${Math.round(tomorrow.windMax)} ${t.home.units.kmh}`)
+        el('span', {}, `${Math.round(tomorrow.windMax)} ${t.home.units.ms}`)
       )
     );
   } else if (state.preset === 'weekend' && weekend.length > 0) {
@@ -1290,7 +1309,7 @@ function buildHeroSection(w, today, tomorrow, weekend, disp, clock, dayPhase, t)
             el(
               'div',
               {className: 'muted-xs', style: {color: '#f8e9ef', fontSize: '11px'}},
-              `${Math.round(day.precipProbMax)}% · ${Math.round(day.windMax)} ${t.home.units.kmh}`
+              `${Math.round(day.precipProbMax)}% · ${Math.round(day.windMax)} ${t.home.units.ms}`
             )
           )
         )
@@ -1335,32 +1354,32 @@ function buildHeroSection(w, today, tomorrow, weekend, disp, clock, dayPhase, t)
         {className: 'hero-top'},
         el(
           'div',
-          {},
-          regionLine &&
-            el(
-              'div',
-              {className: 'hero-meta'},
-              el('span', {className: 'aer-eyebrow-line'}),
-              createIcon('pin', 'sm c-pink'),
-              el('span', {}, regionLine)
-            ),
-          el('h1', {className: 'hero-city'}, disp.name)
-        ),
-        el(
-          'div',
-          {className: 'hero-clock-box'},
+          {className: 'hero-top-row'},
           el(
             'div',
-            {},
+            {className: 'hero-city-wrap'},
+            regionLine &&
+              el(
+                'div',
+                {className: 'hero-meta'},
+                el('span', {className: 'aer-eyebrow-line'}),
+                createIcon('pin', 'sm c-pink'),
+                el('span', {}, regionLine)
+              ),
+            el('h1', {className: 'hero-city'}, disp.name)
+          ),
+          el(
+            'div',
+            {className: 'hero-clock-box'},
             el(
               'div',
-              {style: {fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.14em', color: 'rgba(243,226,232,0.82)'}},
+              {style: {fontSize: '10.5px', textTransform: 'uppercase', letterSpacing: '0.14em', color: 'rgba(243,226,232,0.84)', whiteSpace: 'nowrap'}},
               t.home.localTime
             ),
             el('div', {className: 'hero-clock mono'}, clock.formattedTime)
-          ),
-          presetBar
-        )
+          )
+        ),
+        el('div', {className: 'hero-preset-row'}, presetBar)
       ),
       heroBottom
     )
@@ -1566,12 +1585,12 @@ function buildMetricsSection(w, t) {
               'div',
               {className: 'metric-val mono'},
               `${Math.round(w.current.windSpeed)} `,
-              el('span', {className: 'muted-xs'}, `${t.home.units.kmh} · ${windDir}`)
+              el('span', {className: 'muted-xs'}, `${t.home.units.ms} · ${windDir}`)
             ),
             el(
               'div',
               {className: 'muted-xs mono', style: {marginTop: '3px', fontSize: '11px'}},
-              `${t.home.metrics.gusts} ${Math.round(w.current.windGusts)} ${t.home.units.kmh}`
+              `${t.home.metrics.gusts} ${Math.round(w.current.windGusts)} ${t.home.units.ms}`
             )
           )
         ),
@@ -2029,7 +2048,7 @@ function formatForecastMetricCell(d, m, t) {
     case 'humidity':
       return `${d.humidityMean}%`;
     case 'windSpeed':
-      return `${Math.round(d.windMax)} ${t.home.units.kmh}`;
+      return `${Math.round(d.windMax)} ${t.home.units.ms}`;
     case 'pressure':
       return `${d.pressureMean} ${t.home.units.hpa}`;
     case 'uvIndex':
@@ -2314,7 +2333,7 @@ function buildCompareSection(t) {
             el(
               'div',
               {className: 'mono muted-xs'},
-              `${t.home.metrics.wind}: ${Math.round(weather.current.windSpeed)} ${t.home.units.kmh} · ${t.home.metrics.humidity}: ${Math.round(weather.current.humidity)}% · ${t.home.metrics.pressure}: ${Math.round(weather.current.pressure)} ${t.home.units.hpa}`
+              `${t.home.metrics.wind}: ${Math.round(weather.current.windSpeed)} ${t.home.units.ms} · ${t.home.metrics.humidity}: ${Math.round(weather.current.humidity)}% · ${t.home.metrics.pressure}: ${Math.round(weather.current.pressure)} ${t.home.units.hpa}`
             )
           );
         })
@@ -2652,17 +2671,79 @@ function renderMain() {
 function renderFooter() {
   if (!refs.footer) return;
   const t = TRANSLATIONS[state.lang];
+  const disp = getLocalizedCityDisplay(state.city, state.lang);
+  const cityLabel = [disp.name, disp.country].filter(Boolean).join(', ');
+  const navIds = ['home', 'forecast', 'map', 'favorites'];
+
   setChildren(
     refs.footer,
     el(
       'div',
-      {className: 'footer-brand'},
-      el('span', {className: 'aer-brand-mark', style: {fontSize: '14px', lineHeight: '1'}}, 'AER'),
-      el('span', {className: 'font-ibr', style: {fontWeight: '600', color: 'var(--text)'}}, '.wave'),
-      el('span', {'aria-hidden': 'true'}, '·'),
-      el('span', {}, t.slogan)
-    ),
-    el('div', {className: 'footer-credit'}, 'CREATED BY IBRAIMOVW AMIR, 2026')
+      {className: 'footer-inner'},
+      el(
+        'div',
+        {className: 'footer-cols'},
+        el(
+          'div',
+          {},
+          el(
+            'div',
+            {className: 'footer-brand'},
+            el('img', {src: './assets/logo.svg', alt: t.brandName, style: {width: '32px', height: '32px', borderRadius: '8px'}}),
+            el(
+              'div',
+              {className: 'brand-lockup'},
+              el('span', {className: 'aer-brand-mark'}, 'AER'),
+              el('span', {className: 'brand-lockup-wave'}, '.wave'),
+              el('span', {className: 'mono c-pink', style: {fontSize: '11px', marginLeft: '4px'}}, t.version)
+            )
+          ),
+          el('p', {className: 'footer-desc'}, t.footer.desc)
+        ),
+        el(
+          'div',
+          {},
+          el('div', {className: 'footer-col-title'}, t.footer.navTitle),
+          el(
+            'ul',
+            {className: 'footer-nav-list'},
+            navIds.map((sec) =>
+              el(
+                'li',
+                {},
+                el(
+                  'button',
+                  {
+                    type: 'button',
+                    className: `footer-link ${state.section === sec ? 'active' : ''}`,
+                    onClick: () => navigate(sec),
+                  },
+                  t.nav[sec]
+                )
+              )
+            )
+          )
+        ),
+        el(
+          'div',
+          {},
+          el('div', {className: 'footer-col-title'}, t.footer.dataTitle),
+          el(
+            'div',
+            {className: 'footer-data-list'},
+            el('div', {style: {color: 'var(--text)', fontWeight: '500'}}, cityLabel),
+            el('div', {}, t.footer.dataSource),
+            el('div', {className: 'mono'}, t.footer.dataUnits)
+          )
+        )
+      ),
+      el(
+        'div',
+        {className: 'footer-bottom'},
+        el('div', {className: 'c-muted'}, t.footer.rights),
+        el('div', {className: 'footer-credit'}, 'CREATED BY IBRAIMOVW AMIR')
+      )
+    )
   );
 }
 
@@ -2820,8 +2901,7 @@ window.addEventListener(
   'pointermove',
   (e) => {
     if (e.pointerType !== 'mouse' || !refs.glow) return;
-    refs.glow.style.left = `${e.clientX}px`;
-    refs.glow.style.top = `${e.clientY}px`;
+    refs.glow.style.transform = `translate3d(${e.clientX - 150}px, ${e.clientY - 150}px, 0)`;
   },
   {passive: true}
 );
@@ -2871,6 +2951,20 @@ window.addEventListener('beforeinstallprompt', (e) => {
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('./sw.js').catch(() => {});
+  });
+}
+
+if (refs.sidebar) {
+  refs.sidebar.addEventListener('mouseenter', () => {
+    if (!sidebarSuppressHover && !state.sidebarPinned) {
+      sidebarHovered = true;
+      syncSidebarVisual();
+    }
+  });
+  refs.sidebar.addEventListener('mouseleave', () => {
+    sidebarHovered = false;
+    sidebarSuppressHover = false;
+    syncSidebarVisual();
   });
 }
 

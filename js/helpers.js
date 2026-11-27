@@ -69,7 +69,7 @@ export function initMagneticButtons() {
   if (reduced) return;
 
   const selector =
-    '.btn-primary, .btn-subtle, .btn-icon, .btn-theme-circle, .seg-btn, .preset-btn, .chip-btn, .sidebar-toggle-btn, .nav-btn';
+    '.btn-primary, .btn-subtle, .btn-icon, .btn-theme-circle, .seg-btn, .preset-btn, .chip-btn';
   let activeEl = null;
 
   function resetActive() {
@@ -334,7 +334,7 @@ export function generateHeroDailySummary(weather, _unit, lang) {
       ? `Осадки вероятны около ${formatIsoTime(wetHour.time)}`
       : 'В ближайшие 24 ч без существенных осадков';
     const windText =
-      maxWind24 >= 35 ? `, порывы ветра до ${Math.round(maxWind24)} км/ч` : ', ветер умеренный';
+      maxWind24 >= 10 ? `, порывы ветра до ${Math.round(maxWind24)} м/с` : ', ветер умеренный';
     return `${precipText}${windText}.`;
   }
 
@@ -342,7 +342,7 @@ export function generateHeroDailySummary(weather, _unit, lang) {
     ? `Precipitation likely around ${formatIsoTime(wetHour.time)}`
     : 'Mostly dry over the next 24 hours';
   const windText =
-    maxWind24 >= 35 ? `, wind gusts up to ${Math.round(maxWind24)} km/h` : ', gentle breeze';
+    maxWind24 >= 10 ? `, wind gusts up to ${Math.round(maxWind24)} m/s` : ', gentle breeze';
   return `${precipText}${windText}.`;
 }
 
@@ -372,11 +372,11 @@ export function generateWeatherAlerts(weather, lang) {
     });
   }
 
-  if (maxGust >= 48) {
+  if (maxGust >= 14) {
     alerts.push({
       title: isRu
-        ? `Сильные порывы до ${Math.round(maxGust)} км/ч`
-        : `Strong Gusts (${Math.round(maxGust)} km/h)`,
+        ? `Сильные порывы до ${Math.round(maxGust)} м/с`
+        : `Strong Gusts (${Math.round(maxGust)} m/s)`,
       description: isRu
         ? 'Ожидается усиление ветра в ближайшие 24 часа.'
         : 'Strong wind gusts expected over the next 24 hours.',
@@ -479,11 +479,11 @@ export function generateWeatherInsights(weather, unit, lang) {
 
   const maxWind = findMaxWind(current.windSpeed, next24, false);
   const windTitle = isRu
-    ? `Ветер ${Math.round(current.windSpeed)} км/ч · порывы ${Math.round(current.windGusts)}`
-    : `Wind ${Math.round(current.windSpeed)} km/h · gusts ${Math.round(current.windGusts)}`;
+    ? `Ветер ${Math.round(current.windSpeed)} м/с · порывы ${Math.round(current.windGusts)} м/с`
+    : `Wind ${Math.round(current.windSpeed)} m/s · gusts ${Math.round(current.windGusts)} m/s`;
 
   let windDesc;
-  if (maxWind >= 35) {
+  if (maxWind >= 10) {
     windDesc = isRu
       ? 'Ветреная погода — учитывайте порывы при поездках.'
       : 'Gusty conditions ahead — plan outdoor activities accordingly.';
@@ -492,7 +492,7 @@ export function generateWeatherInsights(weather, unit, lang) {
   }
 
   insights.push({
-    severity: maxWind >= 35 ? 'alert' : 'info',
+    severity: maxWind >= 10 ? 'alert' : 'info',
     title: windTitle,
     description: windDesc,
   });

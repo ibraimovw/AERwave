@@ -40,9 +40,9 @@ function getLayerColor(layer, pt) {
     return '#818cf8';
   }
   if (layer === 'wind') {
-    if (pt.windSpeed < 12) return '#7dd3fc';
-    if (pt.windSpeed < 25) return '#60a5fa';
-    if (pt.windSpeed < 40) return '#fbbf24';
+    if (pt.windSpeed < 4) return '#7dd3fc';
+    if (pt.windSpeed < 7) return '#60a5fa';
+    if (pt.windSpeed < 11) return '#fbbf24';
     return '#fb7185';
   }
   if (pt.cloudCover < 25) return '#7dd3fc';
@@ -79,10 +79,10 @@ function getLegendItems(layer, unit, t) {
   }
   if (layer === 'wind') {
     return [
-      {c: '#7dd3fc', l: '<12'},
-      {c: '#60a5fa', l: '20'},
-      {c: '#fbbf24', l: '35'},
-      {c: '#fb7185', l: `40+ ${t.map.units.wind}`},
+      {c: '#7dd3fc', l: '<4'},
+      {c: '#60a5fa', l: '7'},
+      {c: '#fbbf24', l: '10'},
+      {c: '#fb7185', l: `11+ ${t.map.units.wind}`},
     ];
   }
   return [

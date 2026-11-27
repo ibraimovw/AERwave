@@ -106,7 +106,7 @@ export const TRANSLATIONS = {
         },
       },
       units: {
-        kmh: 'км/ч',
+        ms: 'м/с',
         hpa: 'гПа',
         km: 'км',
         mm: 'мм',
@@ -169,7 +169,7 @@ export const TRANSLATIONS = {
       activeCity: 'Выбранный город',
       units: {
         precip: 'мм/ч',
-        wind: 'км/ч',
+        wind: 'м/с',
         clouds: '%',
       },
     },
@@ -200,6 +200,14 @@ export const TRANSLATIONS = {
       loadFailedTitle: 'Не удалось загрузить погоду',
       loadFailedDesc: 'Проверьте подключение к интернету и попробуйте снова.',
       retry: 'Попробовать снова',
+    },
+    footer: {
+      desc: 'Погодный сервис с панорамами городов, прогнозом на 16 дней, качеством воздуха и интерактивной картой.',
+      navTitle: 'Навигация',
+      dataTitle: 'Данные и шкалы',
+      dataSource: 'Источник: Open-Meteo и Wikimedia',
+      dataUnits: 'Шкалы: °C / °F · м/с · гПа',
+      rights: '© 2026 AER.wave. Все права защищены.',
     },
     windDirs: ['С', 'СВ', 'В', 'ЮВ', 'Ю', 'ЮЗ', 'З', 'СЗ'],
     uvLevels: {
@@ -347,7 +355,7 @@ export const TRANSLATIONS = {
         },
       },
       units: {
-        kmh: 'km/h',
+        ms: 'm/s',
         hpa: 'hPa',
         km: 'km',
         mm: 'mm',
@@ -410,7 +418,7 @@ export const TRANSLATIONS = {
       activeCity: 'Active city',
       units: {
         precip: 'mm/h',
-        wind: 'km/h',
+        wind: 'm/s',
         clouds: '%',
       },
     },
@@ -441,6 +449,14 @@ export const TRANSLATIONS = {
       loadFailedTitle: 'Unable to load weather',
       loadFailedDesc: 'Check your connection and try again.',
       retry: 'Retry',
+    },
+    footer: {
+      desc: 'Weather platform with city panoramas, 16-day forecasts, air quality metrics, and an interactive model map.',
+      navTitle: 'Navigation',
+      dataTitle: 'Data & Units',
+      dataSource: 'Sources: Open-Meteo & Wikimedia',
+      dataUnits: 'Units: °C / °F · m/s · hPa',
+      rights: '© 2026 AER.wave. All rights reserved.',
     },
     windDirs: ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'],
     uvLevels: {

@@ -10,7 +10,7 @@ function getParticleCount(mood) {
 
 // Создаём одну частицу для анимации на фоне
 function createOneParticle(state, width, height) {
-  const windBias = Math.min(4, state.windSpeed / 12);
+  const windBias = Math.min(4, state.windSpeed / 3.5);
 
   if (state.mood === 'rain' || state.mood === 'storm') {
     return {
@@ -62,7 +62,7 @@ function createOneParticle(state, width, height) {
 
 // Анимация осадков, облаков и звёзд на холсте
 export function startWeatherCanvas(canvas) {
-  let state = {mood: 'clear', dayPhase: 'night', windSpeed: 6, theme: 'dark'};
+  let state = {mood: 'clear', dayPhase: 'night', windSpeed: 2, theme: 'dark'};
   let particles = [];
   let animId = 0;
   let width = window.innerWidth;
@@ -189,7 +189,7 @@ export function startWeatherCanvas(canvas) {
   return {
     update(next) {
       const changed =
-        next.mood !== state.mood || next.dayPhase !== state.dayPhase || Math.abs(next.windSpeed - state.windSpeed) > 6;
+        next.mood !== state.mood || next.dayPhase !== state.dayPhase || Math.abs(next.windSpeed - state.windSpeed) > 2;
       state = {...state, ...next};
       if (changed) seedParticles();
     },
